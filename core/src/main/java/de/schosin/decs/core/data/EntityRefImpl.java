@@ -1,9 +1,11 @@
 package de.schosin.decs.core.data;
 
+import de.schosin.decs.api.entities.EntityArchetype;
 import de.schosin.decs.api.entities.EntityRef;
+import de.schosin.decs.api.internal.InternalBaseEntity;
 import de.schosin.decs.api.utils.pool.Pooled;
 
-public final class EntityRefImpl implements EntityRef, Pooled {
+public final class EntityRefImpl implements EntityRef, InternalBaseEntity, Pooled {
 
     EntityArchetypeImpl archetype;
     int index;
@@ -61,6 +63,16 @@ public final class EntityRefImpl implements EntityRef, Pooled {
         if (this.archetype != null) {
             this.archetype.freeEntityRef(this);
         }
+    }
+
+    @Override
+    public EntityArchetype archetype() {
+        return archetype;
+    }
+
+    @Override
+    public int index() {
+        return index;
     }
 
     @Override

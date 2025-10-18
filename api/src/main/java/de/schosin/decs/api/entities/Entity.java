@@ -14,7 +14,7 @@ import de.schosin.decs.api.utils.collections.EntityBag;
  * The returned value must either be {@link EntityRef#delete() deleted} or {@link EntityRef#free() freed} if no longer needed to avoid garbage collection. <br />
  * A {@link EntityBag} can be used to store a collection of references that are automatically removed if the referenced entity is deleted.
  */
-public interface Entity {
+public interface Entity extends BaseEntity {
 
     /**
      * Returns the id of the entity.

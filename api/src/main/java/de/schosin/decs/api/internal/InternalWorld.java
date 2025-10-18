@@ -3,8 +3,6 @@ package de.schosin.decs.api.internal;
 import java.util.function.Function;
 
 import de.schosin.decs.api.World;
-import de.schosin.decs.api.annotations.system.Inserted;
-import de.schosin.decs.api.annotations.system.Removed;
 import de.schosin.decs.api.builder.WorldBuilder;
 import de.schosin.decs.api.entities.Composition;
 import de.schosin.decs.api.entities.EntityArchetype;
@@ -37,12 +35,6 @@ public interface InternalWorld extends World {
      * @return archetype instance
      */
     EntityArchetype getEntityArchetype(Class<?>... components);
-
-    /**
-     * Flushes created, modified and deleted entities. <br>
-     * This will cause {@link Inserted @Inserted} and {@link Removed @Remmoved} callbacks to be run for those entities.
-     */
-    void flushChanges();
 
     /**
      * Adds a {@link EntityArchetypeListener} for whenever an entity matches the given {@link Composition}.

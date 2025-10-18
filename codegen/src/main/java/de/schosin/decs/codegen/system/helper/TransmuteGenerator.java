@@ -78,8 +78,8 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
 
         var methodParams = method.getParameters();
         var entityParam = methodParams.isEmpty() ? null : methodParams.getFirst();
-        if (entityParam == null || !entityParam.asType().toString().equals(Utils.ENTITY.canonicalName()) || !"entity".equals(entityParam.getSimpleName().toString())) {
-            printError("@Transmute methods must start with \"Entity entity\".", method);
+        if (entityParam == null || !types.isAssignable(entityParam.asType(), elements.getTypeElement(Utils.BASE_ENTITY.canonicalName()).asType()) || !"entity".equals(entityParam.getSimpleName().toString())) {
+            printError("@Transmute methods must start with \"Entity entity\", \"EntityRef entity\", or \"BaseEntity entity\".", method);
             error = true;
         }
 
@@ -154,8 +154,8 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
         // protected final void createWhateverThisCouldBeCalled(int index, Player player, Position playerPos, Position pos, Render render, WhateverThisCouldBeCalled wtcbc)
 
         var enumComponents = enumParameters.stream().map(parameter -> resolveParameter(method, parameter)).map(ComponentParameter.class::cast).toList();
-        return new UtilityData(system,
-                new TransmuteMethod(method, initializer, method.getSimpleName().toString(), initializer.getSimpleName().toString(), parameters, enumComponents, components, removeTypes));
+        var transmuteMethod = new TransmuteMethod(method, initializer, method.getSimpleName().toString(), initializer.getSimpleName().toString(), (ClassName) ClassName.get(entityParam.asType()), parameters, enumComponents, components, removeTypes);
+        return new UtilityData(system, transmuteMethod);
     }
 
     private List<Parameter> resolveParameters(ExecutableElement method, ExecutableElement initializer, List<? extends VariableElement> enumParameters) {
@@ -257,9 +257,9 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
                 .toList();
 
         var code = CodeBlock.builder();
-        code.addStatement("$1T _entity = ($1T) __entity", Utils.INTERNAL_ENTITY);
-        code.addStatement("int _index = _entity.index");
-        code.addStatement("$1T _archetype = _entity.archetype", Utils.ENTITY_ARCHETYPE);
+        code.addStatement("$1T _entity = ($1T) __entity", Utils.INTERNAL_BASE_ENTITY);
+        code.addStatement("int _index = _entity.index()");
+        code.addStatement("$1T _archetype = _entity.archetype()", Utils.ENTITY_ARCHETYPE);
 
         code.add(System.lineSeparator());
         code.add("// Retrieve target archetype, return early if null (entity marked for deletion)").add(System.lineSeparator());
@@ -289,7 +289,7 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
         return MethodSpec.methodBuilder(method.methodName())
                 .addAnnotation(Override.class)
                 .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                .addParameter(Utils.ENTITY, "__entity")
+                .addParameter(method.entityParam(), "__entity")
                 .addParameters(parameters)
                 .addParameters(enumComponents)
                 .addCode(code.build())
@@ -398,7 +398,8 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
             }
             for (var component : method.enumComponents()) {
                 switch (component.data()) {
-                    case ComponentData.EnumComponent c -> code.addStatement("this.%s = archetype.getData($1T.class)".formatted(component.fieldName()), component.type());
+                    case ComponentData.EnumComponent c ->
+                            code.addStatement("this.%s = archetype.getData($1T.class)".formatted(component.fieldName()), component.type());
                     case ComponentData.ClassComponent c -> {
                     }
                     case ComponentData.SingletonEnumComponent c -> {
@@ -426,7 +427,8 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
             if (!method.enumComponents().isEmpty()) {
                 for (var component : method.enumComponents()) {
                     switch (component.data()) {
-                        case ComponentData.EnumComponent c -> code.addStatement("this.%s.setUnsafe(_index, %s)".formatted(component.fieldName(), component.name()));
+                        case ComponentData.EnumComponent c ->
+                                code.addStatement("this.%s.setUnsafe(_index, %s)".formatted(component.fieldName(), component.name()));
                         case ComponentData.ClassComponent c -> {
                         }
                         case ComponentData.SingletonEnumComponent c -> {

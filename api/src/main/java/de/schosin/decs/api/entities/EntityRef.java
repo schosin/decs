@@ -19,7 +19,7 @@ import de.schosin.decs.api.utils.collections.EntityBag;
  * Make sure to call call {@link #free()} if the reference is no longer needed.
  * Read the documentation of APIs accepting or working on this type to know whether they already free the references themselves, such as {@link EntityBag}.
  */
-public interface EntityRef {
+public interface EntityRef extends BaseEntity {
 
     /**
      * Returns the id of the entity.

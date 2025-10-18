@@ -62,7 +62,7 @@ class TypeDataTest {
             var composition = new CompositionData(List.of(), null, null);
 
             return Stream.of(
-                    new SystemData(null, ClassName.get("foo", "Bar"), composition, List.of(new SystemProcessorMethod(null, "foo", List.of())), List.of(), List.of()),
+                    new SystemData(null, ClassName.get("foo", "Bar"), composition, List.of(new SystemProcessorMethod(null, "foo", true, List.of())), List.of(), List.of()),
                     new SystemData(null, ClassName.get("foo", "Bar"), composition, List.of(), List.of(new InsertedMethod(null, "foo", null, List.of())), List.of()),
                     new SystemData(null, ClassName.get("foo", "Bar"), composition, List.of(), List.of(), List.of(new CountMethod(null, "foo", null))));
         }

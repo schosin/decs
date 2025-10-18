@@ -32,7 +32,7 @@ public sealed interface SystemMethod extends ProcessorMethod {
     /**
      * Describes a {@code @SystemProcessor} method.
      */
-    record SystemProcessorMethod(ExecutableElement method, String methodName, List<SystemParameterData> parameters) implements SystemMethod {
+    record SystemProcessorMethod(ExecutableElement method, String methodName, boolean modifying, List<SystemParameterData> parameters) implements SystemMethod {
 
         static final String TYPE = "SYSTEM_PROCESSOR";
 
@@ -40,6 +40,7 @@ public sealed interface SystemMethod extends ProcessorMethod {
         public void writeMetadata(Writer writer) throws IOException {
             writer.append(TYPE).append(System.lineSeparator());
             writer.append(methodName).append(System.lineSeparator());
+            writer.append(modifying ? "true" : "false").append(System.lineSeparator());
 
             writer.append(String.valueOf(parameters.size())).append(System.lineSeparator());
             for (var parameter : parameters) {
@@ -49,6 +50,7 @@ public sealed interface SystemMethod extends ProcessorMethod {
 
         static SystemProcessorMethod readMetadata(BufferedReader reader) throws IOException {
             var methodName = reader.readLine();
+            var modifying = "true".equals(reader.readLine());
 
             var count = Integer.parseInt(reader.readLine());
             var parameters = new ArrayList<SystemParameterData>(count);
@@ -56,7 +58,7 @@ public sealed interface SystemMethod extends ProcessorMethod {
                 parameters.add(SystemParameterData.readMetadata(reader));
             }
 
-            return new SystemProcessorMethod(null, methodName, parameters);
+            return new SystemProcessorMethod(null, methodName, modifying, parameters);
         }
 
     }

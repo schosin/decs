@@ -11,7 +11,7 @@ import de.schosin.decs.api.entities.EntityRef;
  * Implementation of {@link Entity} for usage of generated code.
  * User code should never use this type.
  */
-public final class InternalEntity implements Entity {
+public final class InternalEntity implements Entity, InternalBaseEntity {
 
     public final EntityArchetype archetype;
 
@@ -35,6 +35,16 @@ public final class InternalEntity implements Entity {
     @Override
     public EntityRef createRef() {
         return archetype.createEntityRef(index);
+    }
+
+    @Override
+    public EntityArchetype archetype() {
+        return archetype;
+    }
+
+    @Override
+    public int index() {
+        return index;
     }
 
     @Override

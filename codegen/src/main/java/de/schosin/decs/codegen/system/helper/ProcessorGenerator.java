@@ -23,6 +23,7 @@ import de.schosin.decs.codegen.system.CompositionData;
 import de.schosin.decs.codegen.system.SystemGenerator;
 import de.schosin.decs.codegen.system.TypeData.SystemData;
 import de.schosin.decs.codegen.system.methods.ProcessorMethod;
+import de.schosin.decs.codegen.system.methods.SystemMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod.SystemProcessorMethod;
 import de.schosin.decs.codegen.utils.ParameterData;
@@ -38,7 +39,7 @@ import de.schosin.decs.codegen.utils.Utils;
 public class ProcessorGenerator extends AbstractSystemGenerator {
 
     public record ProcessorResult(List<FieldSpec> fields, List<TypeSpec> types, CodeBlock.Builder fieldInit,
-            CodeBlock.Builder runImpl) {
+                                  CodeBlock.Builder runImpl) {
 
         private static final ProcessorResult EMPTY = new ProcessorResult(List.of(), List.of(), CodeBlock.builder(), CodeBlock.builder());
 
@@ -94,8 +95,11 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
             return null;
         }
 
+        var systemProcessor = resolveAnnotation(method, Utils.SYSTEM_PROCESSOR);
+        var modifying = !systemProcessor.getElementValues().isEmpty() && Boolean.TRUE.equals(systemProcessor.getElementValues().values().iterator().next().getValue());
+
         var parameters = resolveSystemParameters(method, "SystemProcessor");
-        var methodData = new SystemProcessorMethod(method, method.getSimpleName().toString(), parameters);
+        var methodData = new SystemProcessorMethod(method, method.getSimpleName().toString(), modifying, parameters);
 
         return new SystemData(system, CompositionData.detect(system, generator), methodData);
     }
@@ -107,8 +111,10 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         for (var parameter : parameters) {
             error |= switch (parameter) {
                 case SystemParameterData p -> false;
-                case ComponentParameter p -> printError("Cannot use a component type as a system parameter.", parameter.parameter());
-                case EntityIdParameter p -> printError("Cannot use non-@Value int as a system parameter.", parameter.parameter());
+                case ComponentParameter p ->
+                        printError("Cannot use a component type as a system parameter.", parameter.parameter());
+                case EntityIdParameter p ->
+                        printError("Cannot use non-@Value int as a system parameter.", parameter.parameter());
                 case EntityParameter p -> printError("Cannot use Entity as a system parameter.", parameter.parameter());
                 case InvalidParameter p -> true;
             };
@@ -165,19 +171,23 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         }
 
         var result = new ProcessorResult();
-        EntityProcessorMethod previousModifying = null;
+        SystemMethod previousModifying = null;
 
         var methods = system.methods();
         for (int i = 0, s = methods.size(); i < s; i++) {
             var method = methods.get(i);
 
             switch (method) {
-                case SystemProcessorMethod processor -> processSystemMethod(className, system, processor, names, result);
-                case EntityProcessorMethod processor -> processEntityMethod(className, system, processor, names, result, previousModifying);
-            }
-
-            if (method instanceof EntityProcessorMethod processor) {
-                previousModifying = system.modifying() || processor.modifying() ? processor : null;
+                case SystemProcessorMethod processor -> {
+                    processSystemMethod(className, system, processor, names, result);
+                    if (previousModifying == null) {
+                        previousModifying = processor.modifying() ? processor : null;
+                    }
+                }
+                case EntityProcessorMethod processor -> {
+                    processEntityMethod(className, system, processor, names, result, previousModifying);
+                    previousModifying = system.modifying() || processor.modifying() ? processor : null;
+                }
             }
 
             if (i < s - 1) {
@@ -207,8 +217,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         code.addStatement(")");
     }
 
-    private void processEntityMethod(ClassName className, SystemData system, EntityProcessorMethod method, HashMap<String, Integer> names, ProcessorResult result,
-            EntityProcessorMethod previousModifying) {
+    private void processEntityMethod(ClassName className, SystemData system, EntityProcessorMethod method, HashMap<String, Integer> names, ProcessorResult result, SystemMethod previousModifying) {
         // Flush changes if a previous
         if (previousModifying != null) {
             // TODO two systems run in parallel, one flushes while the other writes to an archetype being flushed

@@ -30,11 +30,15 @@ public class TransmuteUtilityTest {
                 .compilationSucceeds()
                 .source("/utility/transmute/SimpleTransmute.java", it -> it.hasNoWarnings())
                 .generatedClass("foo.SimpleTransmuteImpl", type -> {
-                    assertThat(type.getMethods()).hasSize(2);
-                    assertThat(type.getMethodsByName("transmute")).hasSize(1);
+                    assertThat(type.getMethods()).hasSize(4);
+                    assertThat(type.getMethodsByName("transmute1")).hasSize(1);
+                    assertThat(type.getMethodsByName("transmute2")).hasSize(1);
+                    assertThat(type.getMethodsByName("transmute3")).hasSize(1);
 
-                    assertThat(type.getNestedTypes()).hasSize(1);
-                    assertThat(type.<CtType<?>>getNestedType("TransmuteTransmuter")).isNotNull();
+                    assertThat(type.getNestedTypes()).hasSize(3);
+                    assertThat(type.<CtType<?>>getNestedType("Transmute1Transmuter")).isNotNull();
+                    assertThat(type.<CtType<?>>getNestedType("Transmute2Transmuter")).isNotNull();
+                    assertThat(type.<CtType<?>>getNestedType("Transmute3Transmuter")).isNotNull();
                 })
                 .executeTest();
     }
@@ -81,13 +85,13 @@ public class TransmuteUtilityTest {
                 .compilationFails()
                 .source("/utility/transmute/errors/FirstNotEntityTransmute.java", it -> it
                         .hasErrors(9).hasWarnings(0)
-                        .hasErrorContaining(10, 19, "@Transmute methods must start with \"Entity entity\".")
-                        .hasErrorContaining(17, 19, "@Transmute methods must start with \"Entity entity\".")
-                        .hasErrorContaining(24, 19, "@Transmute methods must start with \"Entity entity\".")
+                        .hasErrorContaining(10, 19, "@Transmute methods must start with \"Entity entity\", \"EntityRef entity\", or \"BaseEntity entity\".")
+                        .hasErrorContaining(17, 19, "@Transmute methods must start with \"Entity entity\", \"EntityRef entity\", or \"BaseEntity entity\".")
+                        .hasErrorContaining(24, 19, "@Transmute methods must start with \"Entity entity\", \"EntityRef entity\", or \"BaseEntity entity\".")
                         .hasErrorContaining(34, 16, "@EntityInitializer methods for @Transmute must start with \"int entityId\".")
                         .hasErrorContaining(41, 16, "@EntityInitializer methods for @Transmute must start with \"int entityId\".")
                         .hasErrorContaining(48, 16, "@EntityInitializer methods for @Transmute must start with \"int entityId\".")
-                        .hasErrorContaining(52, 19, "@Transmute methods must start with \"Entity entity\".")
+                        .hasErrorContaining(52, 19, "@Transmute methods must start with \"Entity entity\", \"EntityRef entity\", or \"BaseEntity entity\".")
                         .hasErrorContaining(62, 16, "@EntityInitializer methods for @Transmute must start with \"int entityId\".")
                         .hasErrorContaining(69, 16, "@EntityInitializer methods for @Transmute must start with \"int entityId\"."))
                 .executeTest();

@@ -4,6 +4,8 @@ import java.util.Set;
 
 import de.schosin.decs.api.annotations.Value;
 import de.schosin.decs.api.annotations.system.EntityProcessor;
+import de.schosin.decs.api.annotations.system.Inserted;
+import de.schosin.decs.api.annotations.system.Removed;
 import de.schosin.decs.api.annotations.system.SystemProcessor;
 import de.schosin.decs.api.annotations.utils.Archetype;
 import de.schosin.decs.api.builder.WorldBuilder;
@@ -135,5 +137,15 @@ public interface World {
      * Maintenance tasks include flushing creation, modification and deletion of entities.
      */
     void process();
+
+    /**
+     * Flushes created, modified and deleted entities. <br>
+     * This will cause {@link Inserted @Inserted} and {@link Removed @Remmoved} callbacks to be run for those entities.
+     * 
+     * <p>
+     * Use this if entities were created, deleted or modified outside of a {@link EntityProcessor @EntityProcessor} or {@link SystemProcessor @SystemProcessor(modifying = true)}. <br />
+     * For {@link SystemProcessor @SystemProcessor} methods, you can instead set {@link SystemProcessor#modifying()} to true to automatically call this method before the next {@link EntityProcessor @EntityProcessor} in the same type.
+     */
+    void flushChanges();
 
 }

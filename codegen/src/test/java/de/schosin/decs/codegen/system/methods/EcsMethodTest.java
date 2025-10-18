@@ -63,7 +63,7 @@ class EcsMethodTest {
         void testSystemProcessorMethod(List<SystemParameterData> parameters) throws IOException {
             var writer = createWriter();
 
-            var method = new SystemProcessorMethod(null, "foo", parameters);
+            var method = new SystemProcessorMethod(null, "foo", true, parameters);
             method.writeMetadata(writer);
 
             var metadata = assertThat(EcsMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(SystemProcessorMethod.class)).actual();
@@ -177,7 +177,7 @@ class EcsMethodTest {
             var componentParameter = new ComponentParameter(null, "bar", new ClassComponent(null, null, ClassName.get("foo", "Bar")), "bar");
             var remove = ClassName.get("foo", "Baz");
 
-            var method = new TransmuteMethod(null, null, "foo", "bar", List.of(parameter), List.of(enumParameter), List.of(componentParameter), List.of(remove));
+            var method = new TransmuteMethod(null, null, "foo", "bar", ClassName.get("bz", "Quux"), List.of(parameter), List.of(enumParameter), List.of(componentParameter), List.of(remove));
             method.writeMetadata(writer);
 
             var metadata = assertThat(EcsMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(TransmuteMethod.class)).actual();

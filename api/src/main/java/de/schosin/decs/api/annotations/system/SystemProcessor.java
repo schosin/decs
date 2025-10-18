@@ -5,6 +5,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import de.schosin.decs.api.World;
+
 /**
  * TODO
  * 
@@ -29,4 +31,17 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.CLASS)
 public @interface SystemProcessor {
+    
+    /**
+     * Set this value to true if the method may create, delete, or transmute entities.
+     * Use this if subsequent {@link EntityProcessor @EntityProcessor} methods in the same type need to see these entities this frame.
+     * 
+     * <p>
+     * Alternatively use {@link World#fl}
+     * 
+     * <p>
+     * Changes are flushed automatically in between system types, so setting this to true is only required for {@link EntityProcessor @EntityProcessor} methods in this type.
+     */
+    boolean modifying() default false;
+    
 }

@@ -35,9 +35,12 @@ public class Utils {
     public static final ClassName ONES = ClassName.get("de.schosin.decs.api.annotations.composition", "Ones");
     public static final ClassName NONE = ClassName.get("de.schosin.decs.api.annotations.composition", "None");
 
+    public static final ClassName SYSTEM_PROCESSOR = ClassName.get("de.schosin.decs.api.annotations.system", "SystemProcessor");
+
     public static final ClassName SYSTEM_TYPE = ClassName.get("de.schosin.decs.api.systems", "SystemType");
     public static final ClassName UTILITY_TYPE = ClassName.get("de.schosin.decs.api.systems", "UtilityType");
 
+    public static final ClassName BASE_ENTITY = ClassName.get("de.schosin.decs.api.entities", "BaseEntity");
     public static final ClassName ENTITY = ClassName.get("de.schosin.decs.api.entities", "Entity");
     public static final ClassName ENTITY_REF = ClassName.get("de.schosin.decs.api.entities", "EntityRef");
     public static final ClassName ENTITY_ARCHETYPE = ClassName.get("de.schosin.decs.api.entities", "EntityArchetype");
@@ -47,6 +50,7 @@ public class Utils {
     public static final ClassName TRANSITION = ClassName.get("de.schosin.decs.api.entities", "Transition");
 
     public static final ClassName INTERNAL_WORLD = ClassName.get("de.schosin.decs.api.internal", "InternalWorld");
+    public static final ClassName INTERNAL_BASE_ENTITY = ClassName.get("de.schosin.decs.api.internal", "InternalBaseEntity");
     public static final ClassName INTERNAL_ENTITY = ClassName.get("de.schosin.decs.api.internal", "InternalEntity");
     public static final ClassName ENTITY_ARCHETYPE_DATA = ClassName.get("de.schosin.decs.api.internal", "EntityArchetypeData");
     public static final ClassName ENTITY_ARCHETYPE_DATA_IMPL = ClassName.get("de.schosin.decs.api.internal", "EntityArchetypeDataImpl");
