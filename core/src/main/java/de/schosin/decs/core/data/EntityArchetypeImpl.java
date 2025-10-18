@@ -17,12 +17,15 @@ import de.schosin.decs.api.entities.Transition;
 import de.schosin.decs.api.entities.Transmutation;
 import de.schosin.decs.api.exceptions.EntityDeletedException;
 import de.schosin.decs.api.exceptions.EntityModifiedException;
+import de.schosin.decs.api.internal.EntityArchetypeData;
 import de.schosin.decs.api.utils.collections.Bag;
 import de.schosin.decs.api.utils.collections.CollectionUtils;
 import de.schosin.decs.api.utils.collections.IntBag;
 import de.schosin.decs.api.utils.collections.IntIntMap;
 import de.schosin.decs.api.utils.pool.Pool;
 import de.schosin.decs.api.utils.pool.Pooled;
+import de.schosin.decs.values.Components;
+import de.schosin.decs.values.Types;
 
 public final class EntityArchetypeImpl implements EntityArchetype {
 
@@ -37,9 +40,7 @@ public final class EntityArchetypeImpl implements EntityArchetype {
     private final EntityIndex entityIndex;
 
     private final List<Class<?>> components;
-    private final Pool<Object>[] pools;
-
-    private final Bag<Object>[] data;
+    private final EntityArchetypeData data;
 
     private final IntBag entities = new IntBag(ENTITY_BAG_SIZE);
     private final IntIntMap indices = new IntIntMap(ENTITY_BAG_SIZE);
@@ -78,8 +79,9 @@ public final class EntityArchetypeImpl implements EntityArchetype {
     private void validateState() {
         int expected = this.entities.size();
 
-        for (int c = 0, cs = this.data.length; c < cs; c++) {
-            Bag<Object> components = this.data[c];
+        Bag<Object>[] data = this.data.getData();
+        for (int c = 0, cs = data.length; c < cs; c++) {
+            Bag<Object> components = data[c];
             if (components != null) {
                 for (int i = 0; i < expected; i++) {
                     if (components.get(i) == null) {
@@ -107,25 +109,12 @@ public final class EntityArchetypeImpl implements EntityArchetype {
         }
     }
 
-    @SuppressWarnings({ "unchecked", "rawtypes" })
     public EntityArchetypeImpl(int id, World world, EntityIndex entityIndex, ComponentIndex componentIndex, List<Class<?>> components, int lockSize, Supplier<Lock> lock) {
         this.id = id;
         this.entityIndex = entityIndex;
 
         this.components = CollectionUtils.listOf(components);
-        this.pools = components.stream().map(componentIndex::getPool).toArray(Pool[]::new);
-        int size = components.size();
-
-        this.data = new Bag[size];
-        for (int i = 0; i < size; i++) {
-            // Skip singleton enums
-            Class clazz = components.get(i);
-            if (clazz.isEnum() && clazz.getEnumConstants().length == 1) {
-                continue;
-            }
-
-            this.data[i] = new Bag<>(clazz, ENTITY_BAG_SIZE);
-        }
+        this.data = (EntityArchetypeData) Types.createArchetypeEntityData(ENTITY_BAG_SIZE, components);
 
         this.lockSize = lockSize;
         this.locks = new Lock[lockSize];
@@ -233,11 +222,10 @@ public final class EntityArchetypeImpl implements EntityArchetype {
     @Override
     @SuppressWarnings("unchecked")
     public final <T> Bag<T> getData(Class<T> type) {
-        // TODO O(n) bad
-
+        // O(n) okay, only used at startup
         for (int i = 0, s = components.size(); i < s; i++) {
             if (type == components.get(i)) {
-                return (Bag<T>) data[i];
+                return (Bag<T>) this.data.getData()[i];
             }
         }
 
@@ -265,10 +253,7 @@ public final class EntityArchetypeImpl implements EntityArchetype {
                     if (index >= this.entities.getCapacity()) {
                         this.entities.ensureCapacity(s);
                         this.references.ensureCapacity(s);
-
-                        for (int i = 0, l = this.data.length; i < l; i++) {
-                            this.data[i].ensureCapacity(s);
-                        }
+                        this.data.ensureCapacity(index);
                     }
                 } finally {
                     this.dataLock.unlock();
@@ -278,16 +263,10 @@ public final class EntityArchetypeImpl implements EntityArchetype {
             // Retrieve entity ids, initialize components
             for (int i = index; i < s; i++) {
                 this.entities.setUnsafe(i, this.entityIndex.getEntityId());
+                this.data.initialize(i);
 
                 if (moved) {
                     this.createdEntities.add(i);
-                }
-
-                for (int c = 0, cs = this.data.length; c < cs; c++) {
-                    Pool<Object> pool = this.pools[c];
-                    if (pool != null) {
-                        this.data[c].setUnsafe(i, pool.getInstance());
-                    }
                 }
             }
         }
@@ -321,9 +300,11 @@ public final class EntityArchetypeImpl implements EntityArchetype {
 
         // Handle entity marked for move to another archetype
         if (targetArchetypeId > -1) {
+            // TODO can this be changed to just throw? parallel systems writing the same entity should not be supported, should it?
+
             // Delete in target archetype
-            EntityArchetypeImpl targetArchetype = entityIndex.getArchetype(targetArchetypeId);
-            targetArchetype.deleteAddedEntity(this.entities.get(index));
+            ArchetypeMover mover = this.movers.get(targetArchetypeId);
+            mover.deleteAddedEntity(this.entities.get(index));
             validateState();
 
             // Remove from moved entities
@@ -347,27 +328,6 @@ public final class EntityArchetypeImpl implements EntityArchetype {
         deletedEntities.insert(0, index);
         changedEntitiesLookup.set(index, DELETED);
         validateState();
-    }
-
-    private void deleteAddedEntity(int entityId) {
-        int index = -1;
-        validateState();
-
-        // Get index of entity
-        int[] data = this.entities.getData();
-        for (int i = this.created.get(), s = this.entities.size(); i < s; i++) {
-            if (data[i] == entityId) {
-                index = i;
-                break;
-            }
-        }
-
-        // Clear slot, remove entities (not freed, will be done in source archetype)
-        this.entities.set(index, -1);
-        for (int i = 0, s = this.data.length; i < s; i++) {
-            this.data[i].set(index, null);
-            validateState();
-        }
     }
 
     @Override
@@ -466,10 +426,7 @@ public final class EntityArchetypeImpl implements EntityArchetype {
                     if (index >= this.entities.getCapacity()) {
                         this.entities.ensureCapacity(index);
                         this.references.ensureCapacity(index);
-
-                        for (int i = 0, s = this.data.length; i < s; i++) {
-                            this.data[i].ensureCapacity(index);
-                        }
+                        this.data.ensureCapacity(index);
                     }
                 } finally {
                     this.dataLock.unlock();
@@ -608,37 +565,13 @@ public final class EntityArchetypeImpl implements EntityArchetype {
                 int entityId = this.entities.removeLast();
                 this.indices.set(entityId, -1);
                 this.entityIndex.freeEntityId(entityId);
-
-                for (int c = 0, cs = this.data.length; c < cs; c++) {
-                    // Remove and free component
-                    Pool<Object> pool = this.pools[c];
-                    if (pool != null) {
-                        Object component = this.data[c].removeLast();
-                        this.pools[c].free(component);
-                    }
-                }
+                this.data.removeAndFreeLastComponents();
 
                 continue;
             }
 
             // Move data from last entity to removed slot
-            for (int c = 0, cs = this.data.length; c < cs; c++) {
-                Bag<Object> components = this.data[c];
-                if (components != null) {
-                    Object[] componentsData = components.getData();
-                    Object component = componentsData[index];
-
-                    // Free removed component
-                    Pool<Object> pool = this.pools[c];
-                    if (pool != null) {
-                        pool.free(component);
-                    }
-
-                    // Move last component to deleted index
-                    componentsData[index] = componentsData[lastIndex];
-                    components.removeLast();
-                }
-            }
+            this.data.removeAndFreeComponents(index);
 
             int lastEntityId = this.entities.get(lastIndex);
 
@@ -697,51 +630,79 @@ public final class EntityArchetypeImpl implements EntityArchetype {
 
     private static final class ArchetypeMover {
 
-        private final EntityArchetypeImpl source;
+        private final EntityArchetypeData sourceData;
+
         private final EntityArchetypeImpl target;
+        private final EntityArchetypeData targetData;
 
         private final int[] mapping;
-        private final int mappingSize;
 
-        private final int createSize;
         private final int[] create;
+        private final int createSize;
+
+        private final boolean[] free;
 
         public ArchetypeMover(EntityArchetypeImpl source, EntityArchetypeImpl target) {
-            this.source = source;
-            this.target = target;
+            this.sourceData = source.data;
 
-            this.mapping = IntStream.range(0, source.components.size())
-                    .map(i -> target.components.indexOf(source.components.get(i)))
-                    .filter(targetIndex -> targetIndex > -1)
+            this.target = target;
+            this.targetData = target.data;
+
+            this.mapping = source.components.stream()
+                    .mapToInt(target.components::indexOf)
                     .toArray();
 
-            this.mappingSize = this.mapping.length;
-
             this.create = IntStream.range(0, target.components.size())
-                    .filter(i -> !source.components.contains(target.components.get(i)))
+                    .filter(i -> !source.components.contains(target.components.get(i)) && Components.getMetadata(target.components.get(i)).getPool() != null)
                     .toArray();
 
             this.createSize = this.create.length;
+
+            this.free = new boolean[target.components.size()];
+            for (int i = 0, s = target.components.size(); i < s; i++) {
+                Class<?> clazz = target.components.get(i);
+                this.free[i] = !source.components.contains(clazz) && Components.getMetadata(clazz).getPool() != null;
+            }
         }
 
         public void moveEntity(int sourceIndex, int targetIndex) {
-            // Copy source components
-            for (int i = 0, s = this.mappingSize; i < s; i++) {
-                int index = this.mapping[i];
-                Object instance = this.source.data[i].get(sourceIndex);
+            Bag<Object>[] sourceData = this.sourceData.getData();
+            Bag<Object>[] targetData = this.targetData.getData();
+            Pool<Object>[] targetPools = this.targetData.getPools();
 
-                this.target.data[index].set(targetIndex, instance);
+            // Copy source components
+            for (int i = 0, s = this.mapping.length; i < s; i++) {
+                int componentIndex = this.mapping[i];
+                if (componentIndex > -1) {
+                    Object instance = sourceData[i].get(sourceIndex);
+                    targetData[componentIndex].set(targetIndex, instance);
+                }
             }
 
             // Add new components from pool
             for (int i = 0, s = this.createSize; i < s; i++) {
-                int index = this.create[i];
-                Pool<Object> pool = this.target.pools[index];
+                int componentIndex = this.create[i];
 
-                if (pool != null) {
-                    this.target.data[index].set(targetIndex, pool.getInstance());
+                Pool<Object> pool = targetPools[componentIndex];
+                targetData[componentIndex].set(targetIndex, pool.getInstance());
+            }
+        }
+
+        public void deleteAddedEntity(int entityId) {
+            int targetIndex = -1;
+
+            // Get index of entity
+            int[] data = target.entities.getData();
+            for (int i = target.created.get(), s = target.entities.size(); i < s; i++) {
+                if (data[i] == entityId) {
+                    targetIndex = i;
+                    break;
                 }
             }
+
+            // Clear slot, remove from entities and data
+            this.target.entities.set(targetIndex, -1);
+            this.targetData.removeComponents(targetIndex, this.free);
         }
 
     }
@@ -789,22 +750,13 @@ public final class EntityArchetypeImpl implements EntityArchetype {
                     int entityId = EntityArchetypeImpl.this.entities.removeLast();
                     EntityArchetypeImpl.this.indices.set(entityId, -1);
                     EntityArchetypeImpl.this.changedEntitiesLookup.set(index, -1);
-
-                    for (int c = 0, cs = EntityArchetypeImpl.this.data.length; c < cs; c++) {
-                        EntityArchetypeImpl.this.data[c].removeLast();
-                    }
+                    EntityArchetypeImpl.this.data.removeLastComponents();
 
                     continue;
                 }
 
                 // Move data from last entity to moved slot
-                for (int c = 0, cs = EntityArchetypeImpl.this.data.length; c < cs; c++) {
-                    Bag<Object> componentsBag = EntityArchetypeImpl.this.data[c];
-                    Object[] components = componentsBag.getData();
-
-                    components[index] = components[lastIndex];
-                    componentsBag.removeLast();
-                }
+                EntityArchetypeImpl.this.data.removeComponents(index);
 
                 // Update indices and entities
                 int entityId = EntityArchetypeImpl.this.entities.get(index);

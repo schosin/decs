@@ -8,6 +8,7 @@ import de.schosin.decs.api.builder.WorldBuilder;
 /**
  * <b>INTERNAL API:</b> This type is not intended to be used directly.
  * 
+ * <p>
  * Object for holding the configuration provided by {@link WorldBuilder#entitiesLocks(int, Supplier)}.
  */
 public final class LockConfig {

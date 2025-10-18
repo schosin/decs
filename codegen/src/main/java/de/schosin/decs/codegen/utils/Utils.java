@@ -8,10 +8,7 @@ import java.util.function.Predicate;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Modifier;
 
-import com.palantir.javapoet.AnnotationSpec;
-import com.palantir.javapoet.ClassName;
-import com.palantir.javapoet.CodeBlock;
-import com.palantir.javapoet.FieldSpec;
+import com.palantir.javapoet.*;
 
 import de.schosin.decs.codegen.DecsAnnotationProcessor;
 import de.schosin.decs.codegen.system.CompositionData;
@@ -21,10 +18,13 @@ public class Utils {
     public static final AnnotationSpec GENERATED = AnnotationSpec.builder(ClassName.get("de.schosin.decs.api.annotations", "Generated"))
             .addMember("value", "\"%s\"".formatted(DecsAnnotationProcessor.class.getName()))
             .addMember("date", "\"%s\"".formatted(Instant.now()))
-            .build();;
+            .build();
+
+    public static final AnnotationSpec SUPPRESS_UNCHECKED_RAWTYPES = AnnotationSpec.builder(SuppressWarnings.class)
+            .addMember("value", "{ \"unchecked\", \"rawtypes\" }")
+            .build();
 
     public static final ClassName WORLD = ClassName.get("de.schosin.decs.api", "World");
-    public static final ClassName INTERNAL_WORLD = ClassName.get("de.schosin.decs.api.internal", "InternalWorld");
 
     public static final ClassName UTILITY = ClassName.get("de.schosin.decs.api.annotations", "Utility");
     public static final ClassName SINGLETON = ClassName.get("de.schosin.decs.api.annotations", "Singleton");
@@ -40,13 +40,16 @@ public class Utils {
 
     public static final ClassName ENTITY = ClassName.get("de.schosin.decs.api.entities", "Entity");
     public static final ClassName ENTITY_REF = ClassName.get("de.schosin.decs.api.entities", "EntityRef");
-    public static final ClassName INTERNAL_ENTITY = ClassName.get("de.schosin.decs.api.internal", "InternalEntity");
-
     public static final ClassName ENTITY_ARCHETYPE = ClassName.get("de.schosin.decs.api.entities", "EntityArchetype");
     public static final ClassName ENTITY_ARCHETYPE_LISTENER = ClassName.get("de.schosin.decs.api.entities", "EntityArchetypeListener");
     public static final ClassName COMPOSITION = ClassName.get("de.schosin.decs.api.entities", "Composition");
     public static final ClassName TRANSMUTATION = ClassName.get("de.schosin.decs.api.entities", "Transmutation");
     public static final ClassName TRANSITION = ClassName.get("de.schosin.decs.api.entities", "Transition");
+
+    public static final ClassName INTERNAL_WORLD = ClassName.get("de.schosin.decs.api.internal", "InternalWorld");
+    public static final ClassName INTERNAL_ENTITY = ClassName.get("de.schosin.decs.api.internal", "InternalEntity");
+    public static final ClassName ENTITY_ARCHETYPE_DATA = ClassName.get("de.schosin.decs.api.internal", "EntityArchetypeData");
+    public static final ClassName ENTITY_ARCHETYPE_DATA_IMPL = ClassName.get("de.schosin.decs.api.internal", "EntityArchetypeDataImpl");
 
     public static final ClassName BAG = ClassName.get("de.schosin.decs.api.utils.collections", "Bag");
     public static final ClassName INT_BAG = ClassName.get("de.schosin.decs.api.utils.collections", "IntBag");
@@ -54,7 +57,12 @@ public class Utils {
 
     public static final ClassName POOL = ClassName.get("de.schosin.decs.api.utils.pool", "Pool");
 
+    public static final ClassName COMPONENTS = ClassName.get("de.schosin.decs.values", "Components");
     public static final ClassName VALUES = ClassName.get("de.schosin.decs.values", "Values");
+
+    public static final WildcardTypeName WILDCARD = WildcardTypeName.subtypeOf(Object.class);
+    public static final ParameterizedTypeName CLASS_WILDCARD = ParameterizedTypeName.get(ClassName.get(Class.class), WILDCARD);
+
 
     public static String capitalize(String value) {
         return value.substring(0, 1).toUpperCase() + value.substring(1);

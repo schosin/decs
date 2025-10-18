@@ -7,6 +7,7 @@ import de.schosin.decs.api.utils.collections.IntBag;
 /**
  * <b>INTERNAL API:</b> This type is not intended to be used directly.
  * 
+ * <p>
  * Listener interface for {@link EntityArchetype#inserted(EntityArchetypeListener)} and {@link EntityArchetype#removed(EntityArchetypeListener)}.
  * Used by the code generation to implement {@link Inserted @Inserted} and {@link Removed @Removed} methods.
  */

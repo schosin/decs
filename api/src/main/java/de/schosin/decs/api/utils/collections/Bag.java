@@ -74,7 +74,7 @@ public class Bag<T> implements Iterable<T> {
         }
     }
 
-    public T set(int index, @NonNull T item) {
+    public T set(int index, T item) {
         if (index >= data.length) {
             ensureCapacity(index);
         }
@@ -86,7 +86,7 @@ public class Bag<T> implements Iterable<T> {
         return this.data[index] = item;
     }
 
-    public T setUnsafe(int index, @NonNull T item) {
+    public T setUnsafe(int index, T item) {
         if (index >= this.size) {
             this.size = index + 1;
         }

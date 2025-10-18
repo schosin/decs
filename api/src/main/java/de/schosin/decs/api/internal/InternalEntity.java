@@ -7,6 +7,7 @@ import de.schosin.decs.api.entities.EntityRef;
 /**
  * <b>INTERNAL API:</b> This type is not intended to be used directly.
  * 
+ * <p>
  * Implementation of {@link Entity} for usage of generated code.
  * User code should never use this type.
  */

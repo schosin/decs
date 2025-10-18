@@ -153,6 +153,7 @@ abstract class AbstractCallbackGenerator<M extends CallbackMethod> extends Abstr
                     .addField(Utils.buildComposition(composition))
                     .addField(Utils.WORLD, "_world", Modifier.PRIVATE, Modifier.FINAL)
                     .addField(Utils.ENTITY_ARCHETYPE, "_archetype", Modifier.PRIVATE, Modifier.FINAL)
+                    .addField(Utils.INT_BAG, "_entities", Modifier.PRIVATE, Modifier.FINAL)
                     .addField(className, "_system", Modifier.PRIVATE, Modifier.FINAL)
                     .addFields(fields)
                     .addFields(componentFields)
@@ -185,7 +186,7 @@ abstract class AbstractCallbackGenerator<M extends CallbackMethod> extends Abstr
             }
 
             // Method call
-            code.addStatement("int[] _data = this._archetype.getEntities().getData()");
+            code.addStatement("int[] _data = this._entities.getData()");
             if (entityParameter) {
                 code.addStatement("$1T _entity = this._entity", Utils.INTERNAL_ENTITY);
             }
@@ -248,7 +249,7 @@ abstract class AbstractCallbackGenerator<M extends CallbackMethod> extends Abstr
             }
 
             // Method call
-            code.addStatement("int[] _data = this._archetype.getEntities().getData()");
+            code.addStatement("int[] _data = this._entities.getData()");
             code.addStatement("int[] _indicesData = _indices.getData()");
             if (entityParameter) {
                 code.addStatement("$1T _entity = this._entity", Utils.INTERNAL_ENTITY);

@@ -1,19 +1,16 @@
 package de.schosin.decs.codegen.components;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 
-public record ComponentsResult(Map<String, ComponentData> components, Map<String, Integer> selects, Map<String, Integer> reads, Map<String, Integer> writes,
+public record ComponentsResult(Map<String, ComponentData> components, List<ComponentData> sortedComponents, Map<String, Integer> selects, Map<String, Integer> reads, Map<String, Integer> writes,
         Map<String, List<TypeElement>> simpleNames) {
 
     public ComponentsResult() {
-        this(new TreeMap<>(), new HashMap<>(), new HashMap<>(), new HashMap<>(), new HashMap<>());
+        this(new TreeMap<>(), new ArrayList<>(), new HashMap<>(), new HashMap<>(), new HashMap<>(), new HashMap<>());
     }
 
     public boolean isComponent(TypeMirror type) {

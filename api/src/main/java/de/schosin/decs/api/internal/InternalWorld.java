@@ -14,6 +14,7 @@ import de.schosin.decs.api.exceptions.InvalidSystemException;
 /**
  * <b>INTERNAL API:</b> This type is not intended to be used directly.
  * 
+ * <p>
  * Extension of {@link World} for usage of generated code.
  * User code should never use this type.
  */

@@ -1,5 +1,6 @@
 package de.schosin.decs.values;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -29,6 +30,17 @@ public final class Types {
      * @return lookup map
      */
     public static Map<Class<?>, Object> getUtilities(Object world) {
+        throw new UnsupportedOperationException(ERROR);
+    }
+
+    /**
+     * Creates an instance of ArchetypeEntityData.
+     *  
+     * @param entityBagSize initial size of data bags
+     * @param components list of components to initialize
+     * @return instance of ArchetypeEntityData
+     */
+    public static Object createArchetypeEntityData(int entityBagSize, List<Class<?>> components) {
         throw new UnsupportedOperationException(ERROR);
     }
 

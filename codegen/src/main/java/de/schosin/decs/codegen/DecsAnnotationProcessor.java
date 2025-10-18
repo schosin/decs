@@ -18,6 +18,7 @@ import com.palantir.javapoet.JavaFile;
 
 import de.schosin.decs.codegen.components.ComponentsGenerator;
 import de.schosin.decs.codegen.components.ComponentsResult;
+import de.schosin.decs.codegen.entityarchetype.EntityArchetypeDataGenerator;
 import de.schosin.decs.codegen.system.SystemGenerator;
 import de.schosin.decs.codegen.system.SystemsResult;
 import de.schosin.decs.codegen.utils.Annotations;
@@ -81,6 +82,10 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
 
             var components = componentsGenerator.generate();
             writeFiles(components);
+
+            var entityArchetypeDataGenerator = new EntityArchetypeDataGenerator(processingEnv, roundEnv, this.components);
+            var entityArchetypeData = entityArchetypeDataGenerator.generate();
+            writeFile(entityArchetypeData);
 
             var systems = systemGenerator.generate();
             writeFiles(systems);

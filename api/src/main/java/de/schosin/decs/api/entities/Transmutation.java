@@ -19,6 +19,7 @@ import de.schosin.decs.values.Components;
 /**
  * <b>INTERNAL API:</b> This type is not intended to be used directly.
  * 
+ * <p>
  * Represents the changes by a {@link Transmute @Transmute} method, containing the ids of the added and removed components.
  */
 public final class Transmutation {

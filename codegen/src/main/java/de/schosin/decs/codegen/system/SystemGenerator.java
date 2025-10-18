@@ -1,57 +1,11 @@
 package de.schosin.decs.codegen.system;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.LineNumberReader;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.NoSuchFileException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.annotation.processing.RoundEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
-import javax.tools.StandardLocation;
-
-import com.palantir.javapoet.ArrayTypeName;
-import com.palantir.javapoet.ClassName;
-import com.palantir.javapoet.CodeBlock;
-import com.palantir.javapoet.FieldSpec;
-import com.palantir.javapoet.MethodSpec;
-import com.palantir.javapoet.ParameterizedTypeName;
-import com.palantir.javapoet.TypeName;
-import com.palantir.javapoet.TypeSpec;
-import com.palantir.javapoet.TypeVariableName;
-import com.palantir.javapoet.WildcardTypeName;
-
+import com.palantir.javapoet.*;
 import de.schosin.decs.codegen.components.ComponentsResult;
 import de.schosin.decs.codegen.system.TypeData.SystemData;
 import de.schosin.decs.codegen.system.TypeData.UtilityData;
-import de.schosin.decs.codegen.system.helper.ArchetypeGenerator;
-import de.schosin.decs.codegen.system.helper.CountGenerator;
-import de.schosin.decs.codegen.system.helper.GeneratorResult;
-import de.schosin.decs.codegen.system.helper.InsertedGenerator;
-import de.schosin.decs.codegen.system.helper.ProcessorGenerator;
+import de.schosin.decs.codegen.system.helper.*;
 import de.schosin.decs.codegen.system.helper.ProcessorGenerator.ProcessorResult;
-import de.schosin.decs.codegen.system.helper.RemovedGenerator;
-import de.schosin.decs.codegen.system.helper.TransmuteGenerator;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.ArchetypeMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.CountMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.TransmuteMethod;
@@ -61,6 +15,21 @@ import de.schosin.decs.codegen.utils.ParameterData.FieldProvider;
 import de.schosin.decs.codegen.utils.ParameterData.SingletonParameter;
 import de.schosin.decs.codegen.utils.ParameterData.SystemParameterData;
 import de.schosin.decs.codegen.utils.Utils;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.tools.StandardLocation;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.NoSuchFileException;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public final class SystemGenerator extends AbstractGenerator {
 
@@ -147,19 +116,17 @@ public final class SystemGenerator extends AbstractGenerator {
         private static final String PACKAGE = "de.schosin.decs.values";
         private static final String NAME = "SystemMetadata";
 
-        private static final ParameterizedTypeName CLASS_WILDCARD = ParameterizedTypeName.get(ClassName.get(Class.class), WildcardTypeName.subtypeOf(Object.class));
-
         public static JavaType create() {
             // TODO move SystemMetadata to api module, remove generated type if possible
 
-            var dependenciesType = ParameterizedTypeName.get(ClassName.get(Set.class), CLASS_WILDCARD);
+            var dependenciesType = ParameterizedTypeName.get(ClassName.get(Set.class), Utils.CLASS_WILDCARD);
             var constructorType = ParameterizedTypeName.get(ClassName.get(Function.class), ClassName.OBJECT, ClassName.OBJECT);
 
             var type = TypeSpec.classBuilder(NAME)
                     .addAnnotation(Utils.GENERATED)
                     .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                    .addField(CLASS_WILDCARD, "clazz", Modifier.PRIVATE, Modifier.FINAL)
-                    .addField(CLASS_WILDCARD, "implementation", Modifier.PRIVATE, Modifier.FINAL)
+                    .addField(Utils.CLASS_WILDCARD, "clazz", Modifier.PRIVATE, Modifier.FINAL)
+                    .addField(Utils.CLASS_WILDCARD, "implementation", Modifier.PRIVATE, Modifier.FINAL)
                     .addField(constructorType, "constructor", Modifier.PRIVATE, Modifier.FINAL)
                     .addField(dependenciesType, "dependencies", Modifier.PRIVATE, Modifier.FINAL)
                     .addMethod(constructor(constructorType, dependenciesType))
@@ -181,8 +148,8 @@ public final class SystemGenerator extends AbstractGenerator {
                     .build();
 
             return MethodSpec.constructorBuilder()
-                    .addParameter(CLASS_WILDCARD, "clazz")
-                    .addParameter(CLASS_WILDCARD, "implementation")
+                    .addParameter(Utils.CLASS_WILDCARD, "clazz")
+                    .addParameter(Utils.CLASS_WILDCARD, "implementation")
                     .addParameter(constructorType, "constructor")
                     .addParameter(dependenciesType, "dependencies")
                     .addCode(code)
@@ -192,7 +159,7 @@ public final class SystemGenerator extends AbstractGenerator {
         private static MethodSpec clazzAccessor() {
             return MethodSpec.methodBuilder("clazz")
                     .addModifiers(Modifier.PUBLIC)
-                    .returns(CLASS_WILDCARD)
+                    .returns(Utils.CLASS_WILDCARD)
                     .addStatement("return this.clazz")
                     .build();
         }
@@ -200,7 +167,7 @@ public final class SystemGenerator extends AbstractGenerator {
         private static MethodSpec implementationAccessor() {
             return MethodSpec.methodBuilder("implementation")
                     .addModifiers(Modifier.PUBLIC)
-                    .returns(CLASS_WILDCARD)
+                    .returns(Utils.CLASS_WILDCARD)
                     .addStatement("return this.implementation")
                     .build();
         }
@@ -228,8 +195,6 @@ public final class SystemGenerator extends AbstractGenerator {
         private static final String TYPES_PACKAGE = "de.schosin.decs.values";
         private static final String TYPES_NAME = "Types";
 
-        private static final ParameterizedTypeName CLASS_WILDCARD = ParameterizedTypeName.get(ClassName.get(Class.class), WildcardTypeName.subtypeOf(Object.class));
-
         public JavaType generate(List<SystemJavaType> systems, List<SystemJavaType> utilities) {
             var type = TypeSpec.classBuilder(TYPES_NAME)
                     .addAnnotation(Utils.GENERATED)
@@ -238,22 +203,24 @@ public final class SystemGenerator extends AbstractGenerator {
                     .addStaticBlock(systemsInitializer(systems))
                     .addMethod(getSystemMetadata(systems))
                     .addMethod(getUtilities(utilities))
+                    .addMethod(createArchetypeEntityData())
                     .addMethod(set())
                     .build();
 
             return JavaType.create(TYPES_PACKAGE, type);
         }
 
+
         private FieldSpec systemsField(List<SystemJavaType> systems) {
             var metadata = ClassName.get("", "SystemMetadata");
-            var fieldType = ParameterizedTypeName.get(ClassName.get(Map.class), CLASS_WILDCARD, metadata);
+            var fieldType = ParameterizedTypeName.get(ClassName.get(Map.class), Utils.CLASS_WILDCARD, metadata);
 
             return FieldSpec.builder(fieldType, "SYSTEMS", Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL).build();
         }
 
         private CodeBlock systemsInitializer(List<SystemJavaType> systems) {
             var metadata = ClassName.get("", "SystemMetadata");
-            var hashMap = ParameterizedTypeName.get(ClassName.get(HashMap.class), CLASS_WILDCARD, metadata);
+            var hashMap = ParameterizedTypeName.get(ClassName.get(HashMap.class), Utils.CLASS_WILDCARD, metadata);
 
             var code = CodeBlock.builder();
             code.addStatement("$1T systems = new $1T()", hashMap);
@@ -289,7 +256,7 @@ public final class SystemGenerator extends AbstractGenerator {
 
             return MethodSpec.methodBuilder("getSystemMetadata")
                     .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                    .addParameter(CLASS_WILDCARD, "clazz")
+                    .addParameter(Utils.CLASS_WILDCARD, "clazz")
                     .returns(returnType)
                     .addStatement("return SYSTEMS.get(clazz)")
                     .build();
@@ -298,8 +265,8 @@ public final class SystemGenerator extends AbstractGenerator {
         private MethodSpec getUtilities(List<SystemJavaType> utilities) {
             // TODO eager utility instantiation might create unused EntityArchetypes for @Archetype methods
 
-            var returnType = ParameterizedTypeName.get(ClassName.get(Map.class), CLASS_WILDCARD, ClassName.OBJECT);
-            var hashMap = ParameterizedTypeName.get(ClassName.get(HashMap.class), CLASS_WILDCARD, ClassName.OBJECT);
+            var returnType = ParameterizedTypeName.get(ClassName.get(Map.class), Utils.CLASS_WILDCARD, ClassName.OBJECT);
+            var hashMap = ParameterizedTypeName.get(ClassName.get(HashMap.class), Utils.CLASS_WILDCARD, ClassName.OBJECT);
 
             var code = CodeBlock.builder();
             code.addStatement("$1T world = ($1T) arg", Utils.INTERNAL_WORLD);
@@ -319,6 +286,18 @@ public final class SystemGenerator extends AbstractGenerator {
                     .addParameter(ClassName.OBJECT, "arg")
                     .returns(returnType)
                     .addCode(code.build())
+                    .build();
+        }
+
+        private MethodSpec createArchetypeEntityData() {
+            var components = ParameterizedTypeName.get(ClassName.get(List.class), Utils.CLASS_WILDCARD);
+
+            return MethodSpec.methodBuilder("createArchetypeEntityData")
+                    .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                    .addParameter(TypeName.INT, "entityBagSize")
+                    .addParameter(components, "components")
+                    .returns(Object.class)
+                    .addStatement("return $1T.create(entityBagSize, components)", Utils.ENTITY_ARCHETYPE_DATA_IMPL)
                     .build();
         }
 

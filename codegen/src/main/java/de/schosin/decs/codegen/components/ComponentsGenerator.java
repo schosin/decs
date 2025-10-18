@@ -1,43 +1,6 @@
 package de.schosin.decs.codegen.components;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.NoSuchFileException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.annotation.processing.RoundEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.Name;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.DeclaredType;
-import javax.tools.StandardLocation;
-
-import com.palantir.javapoet.ClassName;
-import com.palantir.javapoet.CodeBlock;
-import com.palantir.javapoet.FieldSpec;
-import com.palantir.javapoet.MethodSpec;
-import com.palantir.javapoet.ParameterizedTypeName;
-import com.palantir.javapoet.TypeName;
-import com.palantir.javapoet.TypeSpec;
-import com.palantir.javapoet.TypeVariableName;
-import com.palantir.javapoet.WildcardTypeName;
-
+import com.palantir.javapoet.*;
 import de.schosin.decs.codegen.components.ComponentData.ClassComponent;
 import de.schosin.decs.codegen.components.ComponentData.EnumComponent;
 import de.schosin.decs.codegen.components.ComponentData.SingletonEnumComponent;
@@ -45,15 +8,26 @@ import de.schosin.decs.codegen.utils.AbstractGenerator;
 import de.schosin.decs.codegen.utils.JavaType;
 import de.schosin.decs.codegen.utils.Utils;
 
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.lang.model.element.*;
+import javax.lang.model.type.DeclaredType;
+import javax.tools.StandardLocation;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.NoSuchFileException;
+import java.util.*;
+import java.util.stream.Collectors;
+
 public class ComponentsGenerator extends AbstractGenerator {
 
     private static final String COMPONENT_TYPE_CLASS = "CLASS";
     private static final String COMPONENT_TYPE_ENUM = "ENUM";
     private static final String COMPONENT_TYPE_SINGLETON = "SINGLETON";
 
-    private static final String PACKAGE = "de.schosin.decs.values";
+    private static final String PACKAGE = Utils.COMPONENTS.packageName();
     private static final String METADATA_NAME = "ComponentMetadata";
-    private static final String COMPONENTS_NAME = "Components";
+    private static final String COMPONENTS_NAME = Utils.COMPONENTS.simpleName();
 
     public ComponentsGenerator(ProcessingEnvironment processingEnv, RoundEnvironment roundEnv, ComponentsResult components) {
         super(processingEnv, roundEnv, components);
@@ -196,6 +170,8 @@ public class ComponentsGenerator extends AbstractGenerator {
         var sortedComponents = new ArrayList<>(this.components.components().values());
         sortedComponents.sort((first, second) -> sortComponents(first, second, this.components));
 
+        this.components.sortedComponents().addAll(sortedComponents);
+
         var result = new ArrayList<JavaType>();
         result.add(Components.create(sortedComponents));
         result.add(ComponentMetadata.create());
@@ -229,8 +205,6 @@ public class ComponentsGenerator extends AbstractGenerator {
 
     private static class Components {
 
-        private static final ParameterizedTypeName CLASS_WILDCARD = ParameterizedTypeName.get(ClassName.get(Class.class), WildcardTypeName.subtypeOf(Object.class));
-
         public static JavaType create(List<ComponentData> components) {
             var type = TypeSpec.classBuilder(COMPONENTS_NAME)
                     .addAnnotation(Utils.GENERATED)
@@ -244,16 +218,16 @@ public class ComponentsGenerator extends AbstractGenerator {
         }
 
         private static FieldSpec lookup(List<ComponentData> components) {
-            var metadata = ParameterizedTypeName.get(ClassName.get("", METADATA_NAME), WildcardTypeName.subtypeOf(Object.class));
-            var map = ParameterizedTypeName.get(ClassName.get(Map.class), CLASS_WILDCARD, metadata);
+            var metadata = ParameterizedTypeName.get(ClassName.get("", METADATA_NAME), Utils.WILDCARD);
+            var map = ParameterizedTypeName.get(ClassName.get(Map.class), Utils.CLASS_WILDCARD, metadata);
 
             return FieldSpec.builder(map, "LOOKUP", Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL).build();
         }
 
         private static CodeBlock lookupInitializer(List<ComponentData> components) {
             var metadataRaw = ClassName.get("", METADATA_NAME);
-            var metadata = ParameterizedTypeName.get(metadataRaw, WildcardTypeName.subtypeOf(Object.class));
-            var hashMap = ParameterizedTypeName.get(ClassName.get(HashMap.class), CLASS_WILDCARD, metadata);
+            var metadata = ParameterizedTypeName.get(metadataRaw, Utils.WILDCARD);
+            var hashMap = ParameterizedTypeName.get(ClassName.get(HashMap.class), Utils.CLASS_WILDCARD, metadata);
 
             var code = CodeBlock.builder();
             code.addStatement("$1T result = new $1T()", hashMap);
@@ -262,10 +236,12 @@ public class ComponentsGenerator extends AbstractGenerator {
                 var component = components.get(i);
 
                 switch (component) {
-                    case ClassComponent c -> code.addStatement("result.put($2T.class, new $1T<>(%d, $2T.class, $3T.unbounded(1024, $2T.class, $2T::new)))"
-                            .formatted(i), metadataRaw, component.className(), Utils.POOL);
-                    case ComponentData.EnumComponentData c -> code.addStatement("result.put($2T.class, new $1T<>(%d, $2T.class, null))"
-                            .formatted(i), metadataRaw, component.className());
+                    case ClassComponent c ->
+                            code.addStatement("result.put($2T.class, new $1T<>(%d, $2T.class, $3T.unbounded(1024, $2T.class, $2T::new)))"
+                                    .formatted(i), metadataRaw, component.className(), Utils.POOL);
+                    case ComponentData.EnumComponentData c ->
+                            code.addStatement("result.put($2T.class, new $1T<>(%d, $2T.class, null))"
+                                    .formatted(i), metadataRaw, component.className());
                 }
             }
 

@@ -292,6 +292,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                     .addField(Utils.buildComposition(composition))
                     .addField(Utils.WORLD, "_world", Modifier.PRIVATE, Modifier.FINAL)
                     .addField(Utils.ENTITY_ARCHETYPE, "_archetype", Modifier.PRIVATE, Modifier.FINAL)
+                    .addField(Utils.INT_BAG, "_entities", Modifier.PRIVATE, Modifier.FINAL)
                     .addField(className, "_system", Modifier.PRIVATE, Modifier.FINAL)
                     .addFields(fields)
                     .addFields(componentFields)
@@ -328,6 +329,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
             var code = CodeBlock.builder();
             code.addStatement("this._world = world");
             code.addStatement("this._archetype = archetype");
+            code.addStatement("this._entities = archetype.getEntities()");
             code.addStatement("this._system = system");
 
             var fieldProviders = parameters.stream()
@@ -395,7 +397,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                 code.add(System.lineSeparator());
             }
 
-            code.addStatement("int[] _data = this._archetype.getEntities().getData()");
+            code.addStatement("int[] _data = this._entities.getData()");
             if (entityParameter) {
                 code.addStatement("$1T _entity = this._entity", Utils.INTERNAL_ENTITY);
             }

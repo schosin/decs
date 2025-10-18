@@ -1,6 +1,7 @@
 package de.schosin.decs.api.entities;
 
 import de.schosin.decs.api.annotations.system.EntityProcessor;
+import de.schosin.decs.api.annotations.system.Removed;
 import de.schosin.decs.api.utils.collections.EntityBag;
 
 /**
@@ -22,6 +23,11 @@ public interface Entity {
 
     /**
      * Marks the entity for deletion.
+     * 
+     * <p>
+     * Entities marked for deletion will be processed after the current {@link EntityProcessor @EntityProcessor} method has processed all entities. <br />
+     * Before their removal, all interested {@link Removed @Removed} handlers will be run. <br />
+     * After all handlers have run, the components of the entity will be freed, making them available for reuse.
      */
     void delete();
 

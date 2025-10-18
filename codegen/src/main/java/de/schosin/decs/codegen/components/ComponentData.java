@@ -3,6 +3,7 @@ package de.schosin.decs.codegen.components;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
@@ -10,6 +11,7 @@ import javax.lang.model.type.DeclaredType;
 import com.palantir.javapoet.ClassName;
 
 import de.schosin.decs.codegen.utils.ParsedType;
+import de.schosin.decs.codegen.utils.Utils;
 
 /**
  * Models the supported component types.
@@ -21,6 +23,13 @@ public sealed interface ComponentData {
     TypeElement element();
 
     ClassName className();
+
+    default String fieldName() {
+        return Utils.decapitalize(className().simpleName()) + "Data";
+    }
+    default String poolFieldName() {
+        return Utils.decapitalize(className().simpleName()) + "Pool";
+    }
 
     void writeMetadata(Writer writer) throws IOException;
 

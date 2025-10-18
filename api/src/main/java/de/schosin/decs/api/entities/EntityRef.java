@@ -1,6 +1,8 @@
 package de.schosin.decs.api.entities;
 
 import de.schosin.decs.api.annotations.system.EntityProcessor;
+import de.schosin.decs.api.annotations.system.Removed;
+import de.schosin.decs.api.annotations.system.SystemProcessor;
 import de.schosin.decs.api.utils.collections.EntityBag;
 
 /**
@@ -32,8 +34,13 @@ public interface EntityRef {
      * Marks the entity for deletion and invalidates this instance.
      * 
      * <p>
-     * The reference to this instance must be removed. <br />
-     * Calling {@link #free()} is not needed.
+     * Entities marked for deletion will be processed after the next {@link SystemProcessor @SystemProcessor} or {@link EntityProcessor @EntityProcessor} has finished. <br />
+     * Before their removal, all interested {@link Removed @Removed} handlers will be run. <br />
+     * After all handlers have run, the components of the entity will be freed, making them available for reuse.
+     * 
+     * <p>
+     * Calling this method automatically {@link #free() frees} this instance, making it available for reuse. <br />
+     * Make sure this instance is no longer referenced after calling {@link #delete()} to avoid bugs caused by its reuse.
      */
     void delete();
 
@@ -59,7 +66,12 @@ public interface EntityRef {
     EntityRef copy();
 
     /**
-     * Frees the reference to be reused.
+     * Frees this instance, invalidating the reference.
+     * When a reference is no longer needed, call this method before removing all references to this instance.
+     * 
+     * <p>
+     * Calling this method does not {@link #delete() delete} the entity. <br />
+     * Make sure this instance is no longer referenced after calling {@link #delete()} to avoid bugs caused by its reuse.
      */
     void free();
 
