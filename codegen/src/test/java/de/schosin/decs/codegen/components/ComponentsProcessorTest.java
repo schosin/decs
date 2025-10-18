@@ -1,16 +1,42 @@
 package de.schosin.decs.codegen.components;
 
+import de.schosin.decs.codegen.utils.Utils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import de.schosin.decs.codegen.CuteTest;
 import de.schosin.decs.codegen.DecsAnnotationProcessor;
+import spoon.reflect.code.CtInvocation;
+import spoon.reflect.visitor.filter.TypeFilter;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 class ComponentsProcessorTest {
 
+    @Test
+    void testInterfaceComponent() {
+        CuteTest.blackBoxTest()
+                .processor(DecsAnnotationProcessor.class)
+                .sourceFilesFromFolders("/components/interfacecomponent")
+                .compilationSucceeds()
+                .source("/components/interfacecomponent/Position.java", it -> it.hasNoWarnings())
+                .generatedClass("foo.PositionImpl", type -> {
+                    assertThat(type.getDeclaredFields()).hasSize(3); // index, x, y
+                    assertThat(type.getDeclaredField("index")).isNotNull();
+
+                    var x = type.getMethodsByName("x");
+                    assertThat(x).hasSize(2);
+
+                    var y = type.getMethodsByName("y");
+                    assertThat(x).hasSize(2);
+                })
+                .executeTest();
+    }
+
     @ParameterizedTest
-    @ValueSource(strings = { "/components/unnamedpackage/utility", "/components/unnamedpackage/system" })
+    @ValueSource(strings = {"/components/unnamedpackage/utility", "/components/unnamedpackage/system"})
     void testErrorOnComponentInUnnamedPackage(String folder) {
         CuteTest.blackBoxTest()
                 .processor(DecsAnnotationProcessor.class)

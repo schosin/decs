@@ -1,22 +1,7 @@
 package de.schosin.decs.codegen.system.methods;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verifyNoInteractions;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.stream.Stream;
-
-import org.assertj.core.api.InstanceOfAssertFactories;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
-
 import com.palantir.javapoet.ClassName;
 import com.palantir.javapoet.TypeName;
-
 import de.schosin.decs.codegen.AbstractManifestTest;
 import de.schosin.decs.codegen.components.ComponentData.ClassComponent;
 import de.schosin.decs.codegen.components.ComponentData.EnumComponent;
@@ -30,14 +15,19 @@ import de.schosin.decs.codegen.system.methods.UtilityMethod.CountMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.TransmuteMethod;
 import de.schosin.decs.codegen.utils.Parameter;
 import de.schosin.decs.codegen.utils.ParameterData;
-import de.schosin.decs.codegen.utils.ParameterData.ComponentParameter;
-import de.schosin.decs.codegen.utils.ParameterData.EntityIdParameter;
-import de.schosin.decs.codegen.utils.ParameterData.EntityParameter;
-import de.schosin.decs.codegen.utils.ParameterData.SingletonParameter;
-import de.schosin.decs.codegen.utils.ParameterData.SystemParameterData;
-import de.schosin.decs.codegen.utils.ParameterData.UtilityParameter;
-import de.schosin.decs.codegen.utils.ParameterData.ValueParameter;
-import de.schosin.decs.codegen.utils.ParameterData.WorldParameter;
+import de.schosin.decs.codegen.utils.ParameterData.*;
+import org.assertj.core.api.InstanceOfAssertFactories;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.stream.Stream;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EcsMethodTest {
 
@@ -51,11 +41,9 @@ class EcsMethodTest {
                     This line does not matter
                     """);
 
-            assertThatThrownBy(() -> EcsMethod.readMetadata(reader, generator))
+            assertThatThrownBy(() -> EcsMethod.readMetadata(reader))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Unknown method type 'UNKNOWN_TYPE'. Perform a clean build.");
-
-            verifyNoInteractions(generator);
         }
 
         @ParameterizedTest
@@ -66,15 +54,13 @@ class EcsMethodTest {
             var method = new SystemProcessorMethod(null, "foo", true, parameters);
             method.writeMetadata(writer);
 
-            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(SystemProcessorMethod.class)).actual();
+            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(SystemProcessorMethod.class)).actual();
             assertThat(metadata.methodName()).isEqualTo(method.methodName());
             assertThat(metadata.parameters()).isEqualTo(method.parameters());
 
-            var systemMetadata = assertThat(SystemMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(SystemProcessorMethod.class)).actual();
+            var systemMetadata = assertThat(SystemMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(SystemProcessorMethod.class)).actual();
             assertThat(systemMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(systemMetadata.parameters()).isEqualTo(method.parameters());
-
-            verifyNoInteractions(generator);
         }
 
         @ParameterizedTest
@@ -82,20 +68,18 @@ class EcsMethodTest {
         void testEntityProcessorMethod(List<ParameterData> parameters) throws IOException {
             var writer = createWriter();
 
-            var method = new EntityProcessorMethod(null, "foo", new CompositionData(List.of(), null, null), parameters);
+            var method = new EntityProcessorMethod(null, "foo", new CompositionData(List.of(), null, null), parameters, null, false);
             method.writeMetadata(writer);
 
-            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();
+            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();
             assertThat(metadata.methodName()).isEqualTo(method.methodName());
             assertThat(metadata.composition()).isEqualTo(method.composition());
             assertThat(metadata.parameters()).isEqualTo(method.parameters());
 
-            var systemMetadata = assertThat(SystemMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();
+            var systemMetadata = assertThat(SystemMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();
             assertThat(systemMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(systemMetadata.composition()).isEqualTo(method.composition());
             assertThat(systemMetadata.parameters()).isEqualTo(method.parameters());
-
-            verifyNoInteractions(generator);
         }
 
         @ParameterizedTest
@@ -106,17 +90,15 @@ class EcsMethodTest {
             var method = new InsertedMethod(null, "foo", new CompositionData(List.of(), null, null), parameters);
             method.writeMetadata(writer);
 
-            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(InsertedMethod.class)).actual();
+            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(InsertedMethod.class)).actual();
             assertThat(metadata.methodName()).isEqualTo(method.methodName());
             assertThat(metadata.composition()).isEqualTo(method.composition());
             assertThat(metadata.parameters()).isEqualTo(method.parameters());
 
-            var callbackMetadata = assertThat(CallbackMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(InsertedMethod.class)).actual();
+            var callbackMetadata = assertThat(CallbackMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(InsertedMethod.class)).actual();
             assertThat(callbackMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(callbackMetadata.composition()).isEqualTo(method.composition());
             assertThat(callbackMetadata.parameters()).isEqualTo(method.parameters());
-
-            verifyNoInteractions(generator);
         }
 
         @ParameterizedTest
@@ -127,17 +109,15 @@ class EcsMethodTest {
             var method = new RemovedMethod(null, "foo", new CompositionData(List.of(), null, null), parameters);
             method.writeMetadata(writer);
 
-            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(RemovedMethod.class)).actual();
+            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(RemovedMethod.class)).actual();
             assertThat(metadata.methodName()).isEqualTo(method.methodName());
             assertThat(metadata.composition()).isEqualTo(method.composition());
             assertThat(metadata.parameters()).isEqualTo(method.parameters());
 
-            var callbackMetadata = assertThat(CallbackMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(RemovedMethod.class)).actual();
+            var callbackMetadata = assertThat(CallbackMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(RemovedMethod.class)).actual();
             assertThat(callbackMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(callbackMetadata.composition()).isEqualTo(method.composition());
             assertThat(callbackMetadata.parameters()).isEqualTo(method.parameters());
-
-            verifyNoInteractions(generator);
         }
 
         @Test
@@ -151,7 +131,7 @@ class EcsMethodTest {
             var method = new ArchetypeMethod(null, null, "foo", "bar", true, List.of(parameter), List.of(enumParameter), List.of(componentParameter));
             method.writeMetadata(writer);
 
-            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(ArchetypeMethod.class)).actual();
+            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(ArchetypeMethod.class)).actual();
             assertThat(metadata.methodName()).isEqualTo(method.methodName());
             assertThat(metadata.initializerName()).isEqualTo(method.initializerName());
             assertThat(metadata.returnsEntityRefs()).isEqualTo(method.returnsEntityRefs());
@@ -159,7 +139,7 @@ class EcsMethodTest {
             assertThat(metadata.enumComponents()).isEqualTo(method.enumComponents());
             assertThat(metadata.components()).isEqualTo(method.components());
 
-            var utilityMetadata = assertThat(UtilityMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(ArchetypeMethod.class)).actual();
+            var utilityMetadata = assertThat(UtilityMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(ArchetypeMethod.class)).actual();
             assertThat(utilityMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(utilityMetadata.initializerName()).isEqualTo(method.initializerName());
             assertThat(utilityMetadata.returnsEntityRefs()).isEqualTo(method.returnsEntityRefs());
@@ -180,7 +160,7 @@ class EcsMethodTest {
             var method = new TransmuteMethod(null, null, "foo", "bar", ClassName.get("bz", "Quux"), List.of(parameter), List.of(enumParameter), List.of(componentParameter), List.of(remove));
             method.writeMetadata(writer);
 
-            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(TransmuteMethod.class)).actual();
+            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(TransmuteMethod.class)).actual();
             assertThat(metadata.methodName()).isEqualTo(method.methodName());
             assertThat(metadata.initializerName()).isEqualTo(method.initializerName());
             assertThat(metadata.parameters()).isEqualTo(method.parameters());
@@ -188,7 +168,7 @@ class EcsMethodTest {
             assertThat(metadata.components()).isEqualTo(method.components());
             assertThat(metadata.remove()).isEqualTo(method.remove());
 
-            var utilityMetadata = assertThat(UtilityMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(TransmuteMethod.class)).actual();
+            var utilityMetadata = assertThat(UtilityMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(TransmuteMethod.class)).actual();
             assertThat(utilityMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(utilityMetadata.initializerName()).isEqualTo(method.initializerName());
             assertThat(utilityMetadata.parameters()).isEqualTo(method.parameters());
@@ -204,11 +184,11 @@ class EcsMethodTest {
             var method = new CountMethod(null, "foo", new CompositionData(List.of(), null, null));
             method.writeMetadata(writer);
 
-            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(CountMethod.class)).actual();
+            var metadata = assertThat(EcsMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(CountMethod.class)).actual();
             assertThat(metadata.methodName()).isEqualTo(method.methodName());
             assertThat(metadata.composition()).isEqualTo(method.composition());
 
-            var utilityMetadata = assertThat(UtilityMethod.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(CountMethod.class)).actual();
+            var utilityMetadata = assertThat(UtilityMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(CountMethod.class)).actual();
             assertThat(utilityMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(utilityMetadata.composition()).isEqualTo(method.composition());
         }

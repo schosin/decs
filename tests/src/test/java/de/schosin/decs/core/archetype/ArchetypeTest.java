@@ -19,25 +19,24 @@ import de.schosin.decs.tests.components.Velocity;
 public class ArchetypeTest {
 
     @ParameterizedTest
-    @ValueSource(ints = {1, 2, 5})
+    @ValueSource(ints = { 1, 2, 5 })
     void testArchetypeInterface(int count) {
         var world = (CoreWorld) World.builder().add(ArchetypeTestSystem.class).build();
 
         var archetype = world.getUtility(TestArchetype.class);
         assertThat(archetype).as("world.createArchetype must return an instance").isNotNull();
+        assertThat(archetype.count).isZero();
 
         var entityArchetype = world.getEntityArchetype(Position.class, Velocity.class);
         assertThat(entityArchetype.getAlive()).isZero();
-        assertThat(entityArchetype.getData(Position.class)).isEmpty();
-        assertThat(entityArchetype.getData(Velocity.class)).isEmpty();
 
         archetype.createEntity(count);
+        assertThat(archetype.count).isEqualTo(count);
+        assertThat(entityArchetype.getAlive()).isZero();
+        
         world.process();
         assertThat(archetype.count).isEqualTo(count);
-        
         assertThat(entityArchetype.getAlive()).isEqualTo(count);
-        assertThat(entityArchetype.getData(Position.class)).hasSize(count).doesNotContainNull();
-        assertThat(entityArchetype.getData(Velocity.class)).hasSize(count).doesNotContainNull();
     }
 
     @Test
@@ -51,7 +50,7 @@ public class ArchetypeTest {
     public static abstract class TestArchetype {
 
         private int count;
-        
+
         @Archetype
         abstract void createEntity(int count);
 

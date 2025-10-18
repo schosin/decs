@@ -1,5 +1,15 @@
 package de.schosin.decs.codegen.system;
 
+import com.palantir.javapoet.ClassName;
+import de.schosin.decs.codegen.system.methods.CallbackMethod;
+import de.schosin.decs.codegen.system.methods.EcsMethod;
+import de.schosin.decs.codegen.system.methods.SystemMethod;
+import de.schosin.decs.codegen.system.methods.UtilityMethod;
+import de.schosin.decs.codegen.utils.ManifestUtils;
+import de.schosin.decs.codegen.utils.ParsedType;
+
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.TypeElement;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Writer;
@@ -7,19 +17,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.TypeElement;
-
-import com.palantir.javapoet.ClassName;
-
-import de.schosin.decs.codegen.system.methods.CallbackMethod;
-import de.schosin.decs.codegen.system.methods.EcsMethod;
-import de.schosin.decs.codegen.system.methods.SystemMethod;
-import de.schosin.decs.codegen.system.methods.UtilityMethod;
-import de.schosin.decs.codegen.utils.AbstractGenerator;
-import de.schosin.decs.codegen.utils.ManifestUtils;
-import de.schosin.decs.codegen.utils.ParsedType;
 
 public sealed interface TypeData {
 
@@ -31,11 +28,11 @@ public sealed interface TypeData {
 
     void writeMetadata(Writer writer) throws IOException;
 
-    static TypeData readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+    static TypeData readMetadata(BufferedReader reader) throws IOException {
         var type = reader.readLine();
         return switch (type) {
-            case SystemData.TYPE -> SystemData.readMetadata(reader, generator);
-            case UtilityData.TYPE -> UtilityData.readMetadata(reader, generator);
+            case SystemData.TYPE -> SystemData.readMetadata(reader);
+            case UtilityData.TYPE -> UtilityData.readMetadata(reader);
             default -> throw new IllegalArgumentException("Unknown type '%s'. Perform a clean build.".formatted(type));
         };
     }
@@ -84,26 +81,26 @@ public sealed interface TypeData {
             }
         }
 
-        static SystemData readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+        static SystemData readMetadata(BufferedReader reader) throws IOException {
             var className = ParsedType.parse(reader.readLine()).getClassName();
             var compositionData = ManifestUtils.readCompositionData(reader, "System '%s'".formatted(className));
 
             var methodCount = Integer.parseInt(reader.readLine());
             var methods = new ArrayList<SystemMethod>(methodCount);
             for (int i = 0; i < methodCount; i++) {
-                methods.add(SystemMethod.readMetadata(reader, generator));
+                methods.add(SystemMethod.readMetadata(reader));
             }
 
             var callbackCount = Integer.parseInt(reader.readLine());
             var callbacks = new ArrayList<CallbackMethod>(callbackCount);
             for (int i = 0; i < callbackCount; i++) {
-                callbacks.add(CallbackMethod.readMetadata(reader, generator));
+                callbacks.add(CallbackMethod.readMetadata(reader));
             }
 
             var utilCount = Integer.parseInt(reader.readLine());
             var utils = new ArrayList<UtilityMethod>(utilCount);
             for (int i = 0; i < utilCount; i++) {
-                utils.add(UtilityMethod.readMetadata(reader, generator));
+                utils.add(UtilityMethod.readMetadata(reader));
             }
 
             return new SystemData(null, className, compositionData, methods, callbacks, utils);
@@ -130,13 +127,13 @@ public sealed interface TypeData {
             }
         }
 
-        static UtilityData readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+        static UtilityData readMetadata(BufferedReader reader) throws IOException {
             var className = ParsedType.parse(reader.readLine()).getClassName();
 
             var count = Integer.parseInt(reader.readLine());
             var utils = new ArrayList<UtilityMethod>(count);
             for (int i = 0; i < count; i++) {
-                var method = UtilityMethod.readMetadata(reader, generator);
+                var method = UtilityMethod.readMetadata(reader);
                 utils.add(method);
             }
 

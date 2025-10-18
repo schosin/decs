@@ -24,6 +24,8 @@ import org.jspecify.annotations.NonNull;
  */
 public class Bag<T> implements Iterable<T> {
 
+    private final Class<? super T> elementClass;
+
     private T[] data;
     private int size;
 
@@ -33,12 +35,18 @@ public class Bag<T> implements Iterable<T> {
 
     @SuppressWarnings("unchecked")
     public Bag(Class<? super T> clazz, int arraySize) {
+        this.elementClass = clazz;
+
         if (arraySize < 1) {
             throw new IllegalArgumentException("arraySize must be atleast 1");
         }
 
         this.data = (T[]) Array.newInstance(clazz, arraySize);
         this.size = 0;
+    }
+
+    public Class<? super T> getElementClass() {
+        return this.elementClass;
     }
 
     public T[] getData() {

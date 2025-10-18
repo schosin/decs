@@ -1,52 +1,35 @@
 package de.schosin.decs.codegen.utils;
 
-import java.util.List;
-import java.util.Set;
+import com.palantir.javapoet.ClassName;
+import com.palantir.javapoet.TypeName;
+import de.schosin.decs.codegen.components.ComponentsResult;
+import de.schosin.decs.codegen.utils.ParameterData.*;
+import de.schosin.decs.codegen.utils.source.SourceProvider;
 
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.PackageElement;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
+import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.PrimitiveType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
-
-import com.palantir.javapoet.ClassName;
-import com.palantir.javapoet.TypeName;
-
-import de.schosin.decs.codegen.components.ComponentsResult;
-import de.schosin.decs.codegen.utils.ParameterData.ComponentParameter;
-import de.schosin.decs.codegen.utils.ParameterData.EntityIdParameter;
-import de.schosin.decs.codegen.utils.ParameterData.EntityParameter;
-import de.schosin.decs.codegen.utils.ParameterData.InvalidParameter;
-import de.schosin.decs.codegen.utils.ParameterData.SingletonParameter;
-import de.schosin.decs.codegen.utils.ParameterData.UtilityParameter;
-import de.schosin.decs.codegen.utils.ParameterData.ValueParameter;
-import de.schosin.decs.codegen.utils.ParameterData.WorldParameter;
+import java.util.List;
+import java.util.Set;
 
 public abstract class AbstractGenerator {
 
-    protected static final String VALUE_ANNOTATION = "de.schosin.decs.api.annotations.Value";
-    protected static final String SINGLETON_ANNOTATION = "de.schosin.decs.api.annotations.Singleton";
-
     private final Messager messager;
 
-    protected final ProcessingEnvironment processingEnv;
-    protected final RoundEnvironment roundEnv;
-    protected final Annotations annotations;
+    public final ProcessingEnvironment processingEnv;
+    public final RoundEnvironment roundEnv;
+    public final Annotations annotations;
 
-    protected final Types types;
-    protected final Elements elements;
+    public final Types types;
+    public final Elements elements;
+    public final SourceProvider sourceProvider;
 
     public final ComponentsResult components;
 
@@ -61,6 +44,7 @@ public abstract class AbstractGenerator {
 
         this.types = processingEnv.getTypeUtils();
         this.elements = processingEnv.getElementUtils();
+        this.sourceProvider = SourceProvider.getInstance(processingEnv);
 
         this.components = components;
     }
@@ -78,7 +62,12 @@ public abstract class AbstractGenerator {
 
     public boolean printError(String msg, Element element) {
         this.error = true;
-        messager.printError(msg, element);
+
+        if (element != null) {
+            messager.printError(msg, element);
+        } else {
+            messager.printError(msg);
+        }
 
         return true;
     }
@@ -88,7 +77,11 @@ public abstract class AbstractGenerator {
     }
 
     public void printWarning(String msg, Element element) {
-        messager.printWarning(msg, element);
+        if (element != null) {
+            messager.printWarning(msg, element);
+        } else {
+            messager.printWarning(msg);
+        }
     }
 
     public void printNote(String msg) {
@@ -96,7 +89,11 @@ public abstract class AbstractGenerator {
     }
 
     public void printNote(String msg, Element element) {
-        messager.printNote(msg, element);
+        if (element != null) {
+            messager.printNote(msg, element);
+        } else {
+            messager.printNote(msg);
+        }
     }
 
     protected boolean isPublicAccessible(TypeElement element) {
@@ -197,7 +194,8 @@ public abstract class AbstractGenerator {
         }
 
         return switch (primitive.getKind()) {
-            case INT, LONG, FLOAT, DOUBLE -> new ValueParameter(parameter, name, TypeName.get(primitive), (String) value.getElementValues().values().iterator().next().getValue());
+            case INT, LONG, FLOAT, DOUBLE ->
+                    new ValueParameter(parameter, name, TypeName.get(primitive), (String) value.getElementValues().values().iterator().next().getValue());
             default -> {
                 printError("Unsupported primitive type for parameter '%s' of method '%s'. Must be int, long, float or double.".formatted(name, format(method)), parameter);
                 yield new InvalidParameter(parameter, name);

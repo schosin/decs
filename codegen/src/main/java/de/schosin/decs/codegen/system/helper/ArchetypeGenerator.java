@@ -24,8 +24,7 @@ import com.palantir.javapoet.ParameterizedTypeName;
 import com.palantir.javapoet.TypeName;
 import com.palantir.javapoet.TypeSpec;
 
-import de.schosin.decs.codegen.components.ComponentData;
-import de.schosin.decs.codegen.components.ComponentData.EnumComponentData;
+import de.schosin.decs.codegen.components.ComponentData.*;
 import de.schosin.decs.codegen.system.SystemGenerator;
 import de.schosin.decs.codegen.system.TypeData;
 import de.schosin.decs.codegen.system.TypeData.UtilityData;
@@ -179,7 +178,7 @@ public class ArchetypeGenerator extends AbstractUtilityGenerator {
         return result;
     }
 
-    public GeneratorResult generate(TypeData typeData, List<ArchetypeMethod> methods, Map<String, Integer> names) {
+    public GeneratorResult generate(TypeData typeData, List<ArchetypeMethod> methods, Map<String, Integer> names, boolean utility) {
         var className = ClassName.get("", typeData.className().simpleName() + "Impl");
 
         var result = new GeneratorResult();
@@ -207,7 +206,7 @@ public class ArchetypeGenerator extends AbstractUtilityGenerator {
 
             result.fields().add(createField(type, fieldName));
             result.methods().add(createImplementation(method, fieldName));
-            result.types().add(TypeGenerator.createType(className, method, type));
+            result.types().add(TypeGenerator.createType(className, method, type, utility));
 
             code.add("this.%s = new $1T(world.getEntityArchetype(".formatted(fieldName), type);
 
@@ -288,48 +287,79 @@ public class ArchetypeGenerator extends AbstractUtilityGenerator {
 
     private static class TypeGenerator {
 
-        private static TypeSpec createType(ClassName className, ArchetypeMethod method, ClassName type) {
+        private static TypeSpec createType(ClassName className, ArchetypeMethod method, ClassName type, boolean utility) {
             return TypeSpec.classBuilder(type)
                     .addModifiers(Modifier.PRIVATE, Modifier.FINAL)
                     .addField(Utils.ENTITY_ARCHETYPE, "_archetype", Modifier.PRIVATE, Modifier.FINAL)
-                    .addFields(componentFields(method))
+                    .addFields(componentFields(method, utility))
                     .addFields(enumComponentFields(method))
-                    .addMethod(constructor(method))
-                    .addMethod(apply(className, method))
+                    .addMethod(constructor(method, utility))
+                    .addMethod(apply(className, method, utility))
                     .build();
         }
 
-        private static List<FieldSpec> componentFields(ArchetypeMethod method) {
+        private static List<FieldSpec> componentFields(ArchetypeMethod method, boolean utility) {
             return method.components().stream()
-                    .map(param -> FieldSpec.builder(ParameterizedTypeName.get(Utils.BAG, param.type()), param.fieldName(), Modifier.PRIVATE, Modifier.FINAL).build())
+                    .map(param -> switch (param.data()) {
+                        case ClassComponent component ->
+                                FieldSpec.builder(ParameterizedTypeName.get(Utils.BAG, param.type()), param.fieldName(), Modifier.PRIVATE, Modifier.FINAL).build();
+                        case EnumComponent component -> null;
+                        case SingletonEnumComponent component -> null;
+                        case InterfaceComponent component -> utility
+                                ? FieldSpec.builder(ParameterizedTypeName.get(Utils.POOL, component.impl()), param.fieldName(), Modifier.PRIVATE, Modifier.FINAL).build()
+                                : FieldSpec.builder(component.impl(), param.fieldName(), Modifier.PRIVATE, Modifier.FINAL).build();
+                    })
+                    .filter(Objects::nonNull)
                     .toList();
         }
 
         private static List<FieldSpec> enumComponentFields(ArchetypeMethod method) {
             return method.enumComponents().stream()
                     .filter(component -> switch (component.data()) {
-                        case ComponentData.EnumComponent c -> true;
-                        case ComponentData.ClassComponent c -> false;
-                        case ComponentData.SingletonEnumComponent c -> false;
+                        case EnumComponent c -> true;
+                        case ClassComponent c -> false;
+                        case SingletonEnumComponent c -> false;
+                        case InterfaceComponent c -> false;
                     })
                     .map(component -> FieldSpec.builder(ParameterizedTypeName.get(Utils.BAG, component.type()), component.fieldName(), Modifier.PRIVATE, Modifier.FINAL).build())
                     .toList();
         }
 
-        private static MethodSpec constructor(ArchetypeMethod method) {
+        private static MethodSpec constructor(ArchetypeMethod method, boolean utility) {
             var code = CodeBlock.builder();
             code.addStatement("this._archetype = archetype");
 
+            code.add(System.lineSeparator());
+            code.addStatement("$1T _data = archetype.getData()", Utils.ENTITY_ARCHETYPE_DATA_IMPL);
+
             for (var component : method.components()) {
-                code.addStatement("this.%s = archetype.getData($1T.class)".formatted(component.fieldName()), component.type());
+                switch (component.data()) {
+                    case ClassComponent c -> {
+                        code.addStatement("this.%1$s = _data.%1$s".formatted(component.fieldName()));
+                    }
+                    case EnumComponent c -> {
+                    }
+                    case SingletonEnumComponent c -> {
+                    }
+                    case InterfaceComponent c -> {
+                        if (utility) {
+                            code.addStatement("this.%s = $1T.unbounded(16, $2T.class, () -> new $2T(_data))".formatted(component.fieldName()), Utils.POOL, c.impl());
+                        } else {
+                            code.addStatement("this.%s = new $1T(_data)".formatted(component.fieldName()), c.impl());
+                        }
+                    }
+                }
             }
             for (var component : method.enumComponents()) {
                 switch (component.data()) {
-                    case ComponentData.EnumComponent c ->
-                            code.addStatement("this.%s = archetype.getData($1T.class)".formatted(component.fieldName()), component.type());
-                    case ComponentData.ClassComponent c -> {
+                    case ClassComponent c -> {
                     }
-                    case ComponentData.SingletonEnumComponent c -> {
+                    case EnumComponent c -> {
+                        code.addStatement("this.%1$s = _data.%1$s".formatted(component.fieldName()));
+                    }
+                    case SingletonEnumComponent c -> {
+                    }
+                    case InterfaceComponent c -> {
                     }
                 }
             }
@@ -341,7 +371,7 @@ public class ArchetypeGenerator extends AbstractUtilityGenerator {
                     .build();
         }
 
-        private static MethodSpec apply(ClassName className, ArchetypeMethod method) {
+        private static MethodSpec apply(ClassName className, ArchetypeMethod method, boolean utility) {
             // Parameters
             var parameters = new ArrayList<ParameterSpec>();
             if (method.returnsEntityRefs()) {
@@ -365,7 +395,20 @@ public class ArchetypeGenerator extends AbstractUtilityGenerator {
                 code.add(System.lineSeparator());
 
                 for (var component : method.components()) {
-                    code.addStatement("$1T[] _%s = this.%s.getData()".formatted(component.name(), component.fieldName()), component.type());
+                    switch (component.data()) {
+                        case ClassComponent c -> {
+                            code.addStatement("$1T[] _%s = this.%s.getData()".formatted(component.name(), component.fieldName()), component.type());
+                        }
+                        case EnumComponent c -> {
+                        }
+                        case SingletonEnumComponent c -> {
+                        }
+                        case InterfaceComponent c -> {
+                            if (utility) {
+                                code.addStatement("$1T %1$s = this.%1$s.getInstance()".formatted(c.fieldName()), c.impl());
+                            }
+                        }
+                    }
                 }
             }
 
@@ -373,22 +416,45 @@ public class ArchetypeGenerator extends AbstractUtilityGenerator {
             code.beginControlFlow("for (int _idx = 0; _idx < count; _idx++)");
 
             code.addStatement("int _i = _index + _idx");
+
+            for (var component : method.components()) {
+                switch (component.data()) {
+                    case ClassComponent c -> {
+                    }
+                    case EnumComponent c -> {
+                    }
+                    case SingletonEnumComponent c -> {
+                    }
+                    case InterfaceComponent c -> {
+                        if (utility) {
+                            code.addStatement("%s.index = _i".formatted(component.fieldName()));
+                        } else {
+                            code.addStatement("this.%s.index = _i".formatted(component.fieldName()));
+                        }
+                    }
+                }
+            }
+
             if (method.returnsEntityRefs()) {
+                code.add(System.lineSeparator());
                 code.addStatement("_entityRefs.add(_archetype.createEntityRef(_i))");
             }
+
             code.add(System.lineSeparator());
 
             if (!method.enumComponents().isEmpty()) {
                 var added = false;
                 for (var component : method.enumComponents()) {
                     switch (component.data()) {
-                        case ComponentData.EnumComponent c -> {
+                        case ClassComponent c -> {
+                        }
+                        case EnumComponent c -> {
                             code.addStatement("this.%s.set(_i, %s)".formatted(component.fieldName(), component.name()));
                             added = true;
                         }
-                        case ComponentData.ClassComponent c -> {
+                        case SingletonEnumComponent c -> {
                         }
-                        case ComponentData.SingletonEnumComponent c -> {
+                        case InterfaceComponent c -> {
                         }
                     }
                 }
@@ -406,11 +472,50 @@ public class ArchetypeGenerator extends AbstractUtilityGenerator {
                 code.add(", %s".formatted(component.name()));
             }
             for (var component : method.components()) {
-                code.add(", _%s[_i]".formatted(component.name()));
+                switch (component.data()) {
+                    case ClassComponent c -> {
+                        code.add(", _%s[_i]".formatted(component.name()));
+                    }
+                    case EnumComponent c -> {
+                    }
+                    case SingletonEnumComponent c -> {
+                    }
+                    case InterfaceComponent c -> {
+                        if (utility) {
+                            code.add(", %s".formatted(component.fieldName()));
+                        } else {
+                            code.add(", this.%s".formatted(component.fieldName()));
+                        }
+                    }
+                }
             }
             code.addStatement(")");
 
             code.endControlFlow();
+
+            var hasCleanUp = false;
+            for (var component : method.components()) {
+                switch (component.data()) {
+                    case ClassComponent c -> {
+                    }
+                    case EnumComponent c -> {
+                    }
+                    case SingletonEnumComponent c -> {
+                    }
+                    case InterfaceComponent c -> {
+                        if (!hasCleanUp) {
+                            code.add(System.lineSeparator());
+                            hasCleanUp = true;
+                        }
+
+                        if (utility) {
+                            code.addStatement("this.%1$s.free(%1$s)".formatted(component.fieldName()));
+                        } else {
+                            code.addStatement("this.%s.index = -1".formatted(component.fieldName()));
+                        }
+                    }
+                }
+            }
 
             return MethodSpec.methodBuilder("apply")
                     .addModifiers(Modifier.PRIVATE, Modifier.FINAL)

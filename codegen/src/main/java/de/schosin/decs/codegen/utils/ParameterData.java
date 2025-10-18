@@ -1,21 +1,18 @@
 package de.schosin.decs.codegen.utils;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.Writer;
+import com.palantir.javapoet.*;
+import com.palantir.javapoet.CodeBlock.Builder;
+import de.schosin.decs.codegen.components.ComponentData;
+import de.schosin.decs.codegen.components.ComponentData.InterfaceComponent;
+import de.schosin.decs.codegen.entityarchetype.EntityArchetypeDataGenerator;
+import de.schosin.decs.codegen.system.CompositionData;
 
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.VariableElement;
-
-import com.palantir.javapoet.ClassName;
-import com.palantir.javapoet.CodeBlock;
-import com.palantir.javapoet.CodeBlock.Builder;
-import com.palantir.javapoet.FieldSpec;
-import com.palantir.javapoet.ParameterizedTypeName;
-import com.palantir.javapoet.TypeName;
-
-import de.schosin.decs.codegen.components.ComponentData;
-import de.schosin.decs.codegen.system.CompositionData;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.stream.Stream;
 
 public sealed interface ParameterData {
 
@@ -39,7 +36,8 @@ public sealed interface ParameterData {
             case EntityIdParameter.TYPE -> EntityIdParameter.readMetadata(reader);
             case EntityParameter.TYPE -> EntityParameter.readMetadata(reader);
             case ComponentParameter.TYPE -> ComponentParameter.readMetadata(reader);
-            default -> throw new IllegalArgumentException("Unknown parameter type '%s'. Perform a clean build.".formatted(type));
+            default ->
+                    throw new IllegalArgumentException("Unknown parameter type '%s'. Perform a clean build.".formatted(type));
         };
     }
 
@@ -47,13 +45,25 @@ public sealed interface ParameterData {
 
         FieldSpec fieldSpec();
 
-        void fieldInit(CodeBlock.Builder code, String worldVar, String archetypeVar);
+        void fieldInit(CodeBlock.Builder code, String worldVar, String archetypeDataVar);
 
     }
 
     sealed interface LocalVariableProvider extends ParameterData {
 
         void localVariable(CodeBlock.Builder code, CompositionData composition);
+
+    }
+
+    sealed interface LoopInitProvider extends ParameterData {
+
+        void loopInit(CodeBlock.Builder code, String indexVar, boolean inline);
+
+    }
+
+    sealed interface CleanUpProvider extends ParameterData {
+
+        void cleanUp(CodeBlock.Builder code, boolean inline);
 
     }
 
@@ -68,7 +78,8 @@ public sealed interface ParameterData {
                 case ValueParameter.TYPE -> ValueParameter.readMetadata(reader);
                 case UtilityParameter.TYPE -> UtilityParameter.readMetadata(reader);
                 case SingletonParameter.TYPE -> SingletonParameter.readMetadata(reader);
-                default -> throw new IllegalArgumentException("Unknown parameter type '%s'. Perform a clean build.".formatted(type));
+                default ->
+                        throw new IllegalArgumentException("Unknown parameter type '%s'. Perform a clean build.".formatted(type));
             };
         }
 
@@ -106,7 +117,8 @@ public sealed interface ParameterData {
 
     }
 
-    record ValueParameter(VariableElement parameter, String name, TypeName type, String valueName) implements SystemParameterData, FieldProvider, LocalVariableProvider {
+    record ValueParameter(VariableElement parameter, String name, TypeName type,
+                          String valueName) implements SystemParameterData, FieldProvider, LocalVariableProvider {
 
         private static final String TYPE = "VALUE";
 
@@ -116,7 +128,7 @@ public sealed interface ParameterData {
         }
 
         @Override
-        public void fieldInit(Builder code, String worldVar, String archetypeVar) {
+        public void fieldInit(Builder code, String worldVar, String archetypeDataVar) {
             code.addStatement("this._values = %s.getValues()".formatted(worldVar));
         }
 
@@ -153,7 +165,8 @@ public sealed interface ParameterData {
 
     }
 
-    record UtilityParameter(VariableElement parameter, String name, ClassName type, String fieldName) implements SystemParameterData, FieldProvider {
+    record UtilityParameter(VariableElement parameter, String name, ClassName type,
+                            String fieldName) implements SystemParameterData, FieldProvider {
 
         private static final String TYPE = "UTILITY";
 
@@ -167,7 +180,7 @@ public sealed interface ParameterData {
         }
 
         @Override
-        public void fieldInit(Builder code, String worldVar, String archetypeVar) {
+        public void fieldInit(Builder code, String worldVar, String archetypeDataVar) {
             code.addStatement("this.%s = %s.getUtility($1T.class)".formatted(fieldName, worldVar), type);
         }
 
@@ -197,7 +210,8 @@ public sealed interface ParameterData {
 
     }
 
-    record SingletonParameter(VariableElement parameter, String name, ClassName type, String fieldName) implements SystemParameterData, FieldProvider {
+    record SingletonParameter(VariableElement parameter, String name, ClassName type,
+                              String fieldName) implements SystemParameterData, FieldProvider {
 
         private static final String TYPE = "SINGLETON";
 
@@ -211,7 +225,7 @@ public sealed interface ParameterData {
         }
 
         @Override
-        public void fieldInit(Builder code, String worldVar, String archetypeVar) {
+        public void fieldInit(Builder code, String worldVar, String archetypeDataVar) {
             code.addStatement("this.%s = %s.getSingleton($1T.class)".formatted(fieldName, worldVar), type);
         }
 
@@ -300,37 +314,47 @@ public sealed interface ParameterData {
 
     }
 
-    record ComponentParameter(VariableElement parameter, String name, ComponentData data, String fieldName) implements EntityParameterData, LocalVariableProvider {
+    record ComponentParameter(VariableElement parameter, String name, ComponentData data,
+                              String fieldName) implements EntityParameterData, LocalVariableProvider, LoopInitProvider, CleanUpProvider {
 
         private static final String TYPE = "COMPONENT";
 
         public ComponentParameter(VariableElement parameter, ComponentData data) {
-            this(parameter, parameter.getSimpleName().toString(), data, Utils.decapitalize(data.className().simpleName()) + "Components");
+            this(parameter, parameter.getSimpleName().toString(), data, data.fieldName());
         }
 
-        public FieldSpec fieldSpec(CompositionData composition) {
-            var bag = ParameterizedTypeName.get(Utils.BAG, type());
-
+        public Stream<FieldSpec> fieldSpec(CompositionData composition, boolean inline, AbstractGenerator generator) {
             return switch (data) {
-                case ComponentData.ClassComponent component -> FieldSpec.builder(bag, fieldName, Modifier.PRIVATE, Modifier.FINAL).build();
-                case ComponentData.EnumComponent component -> FieldSpec.builder(bag, fieldName, Modifier.PRIVATE, Modifier.FINAL).build();
+                case ComponentData.ClassComponent component ->
+                        Stream.of(FieldSpec.builder(ParameterizedTypeName.get(Utils.BAG, type()), fieldName, Modifier.PRIVATE, Modifier.FINAL).build());
+                case ComponentData.EnumComponent component ->
+                        Stream.of(FieldSpec.builder(ParameterizedTypeName.get(Utils.BAG, type()), fieldName, Modifier.PRIVATE, Modifier.FINAL).build());
                 case ComponentData.SingletonEnumComponent component -> {
                     var all = composition.all() != null && composition.all().contains(type());
                     var none = composition.none() != null && composition.none().contains(type());
 
                     if (!all && !none) {
-                        yield FieldSpec.builder(component.className(), fieldName, Modifier.PRIVATE, Modifier.FINAL).build();
+                        yield Stream.of(FieldSpec.builder(component.className(), fieldName, Modifier.PRIVATE, Modifier.FINAL).build());
                     }
 
-                    yield null;
+                    yield Stream.empty();
                 }
+                case ComponentData.InterfaceComponent component when inline -> Stream.concat(
+                        Stream.of(FieldSpec.builder(TypeName.BOOLEAN, fieldName + "Present", Modifier.PRIVATE, Modifier.FINAL).build()),
+                        component.fields().stream()
+                                .map(field -> EntityArchetypeDataGenerator.createInterfaceComponentField(component, field, generator).field()));
+                case ComponentData.InterfaceComponent component -> Stream.of(
+                        FieldSpec.builder(component.impl(), fieldName, Modifier.PRIVATE, Modifier.FINAL).build(),
+                        FieldSpec.builder(TypeName.BOOLEAN, fieldName + "Present", Modifier.PRIVATE, Modifier.FINAL).build());
             };
         }
 
-        public void fieldInit(Builder code, String worldVar, String archetypeVar, CompositionData composition) {
+        public void fieldInit(Builder code, String worldVar, String archetypeVar, String archetypeDataVar, CompositionData composition, boolean inline, AbstractGenerator generator) {
             switch (data) {
-                case ComponentData.ClassComponent component -> code.addStatement("this.%s = %s.getData($1T.class)".formatted(fieldName, archetypeVar), type());
-                case ComponentData.EnumComponent component -> code.addStatement("this.%s = %s.getData($1T.class)".formatted(fieldName, archetypeVar), type());
+                case ComponentData.ClassComponent component ->
+                        code.addStatement("this.%1$s = %2$s.%1$s".formatted(fieldName, archetypeDataVar));
+                case ComponentData.EnumComponent component ->
+                        code.addStatement("this.%1$s = %2$s.%1$s".formatted(fieldName, archetypeDataVar));
                 case ComponentData.SingletonEnumComponent component -> {
                     var all = composition.all() != null && composition.all().contains(type());
                     var none = composition.none() != null && composition.none().contains(type());
@@ -339,6 +363,18 @@ public sealed interface ParameterData {
                         code.addStatement("this.%s = %s.getComponents().contains($1T.class) ? $1T.%s : null".formatted(fieldName, archetypeVar, component.instance()), component.className());
                     }
                 }
+                case ComponentData.InterfaceComponent component when inline -> {
+                    for (var field : component.fields()) {
+                        var fieldSpec = EntityArchetypeDataGenerator.createInterfaceComponentField(component, field, generator);
+                        code.addStatement("this.%1$s = %2$s.%1$s".formatted(fieldSpec.field().name(), archetypeDataVar));
+                    }
+
+                    code.addStatement("this.%sPresent = archetype.getComponents().contains($1T.class)".formatted(fieldName), component.className());
+                }
+                case ComponentData.InterfaceComponent component -> {
+                    code.addStatement("this.%s = new $1T(archetype.getData())".formatted(fieldName), component.impl());
+                    code.addStatement("this.%sPresent = archetype.getComponents().contains($1T.class)".formatted(fieldName), component.className());
+                }
             }
         }
 
@@ -346,20 +382,43 @@ public sealed interface ParameterData {
         public void localVariable(Builder code, CompositionData composition) {
             if (composition.all() != null && composition.all().contains(type())) {
                 switch (data) {
-                    case ComponentData.ClassComponent component -> code.addStatement("$1T[] %s = this.%s.getData()".formatted(name, fieldName), type());
-                    case ComponentData.EnumComponent component -> code.addStatement("$1T[] %s = this.%s.getData()".formatted(name, fieldName), type());
+                    case ComponentData.ClassComponent component ->
+                            code.addStatement("$1T[] %s = this.%s.getData()".formatted(name, fieldName), type());
+                    case ComponentData.EnumComponent component ->
+                            code.addStatement("$1T[] %s = this.%s.getData()".formatted(name, fieldName), type());
                     case ComponentData.SingletonEnumComponent component -> {
+                    }
+                    case ComponentData.InterfaceComponent component -> {
                     }
                 }
             } else if (composition.none() != null && composition.none().contains(type())) {
                 // no local variables (condition not inverted to keep same structure as #entityAccessor
             } else {
                 switch (data) {
-                    case ComponentData.ClassComponent component -> code.addStatement("$1T[] %1$s = this.%2$s != null ? this.%2$s.getData() : null".formatted(name, fieldName), type());
-                    case ComponentData.EnumComponent component -> code.addStatement("$1T[] %1$s = this.%2$s != null ? this.%2$s.getData() : null".formatted(name, fieldName), type());
+                    case ComponentData.ClassComponent component ->
+                            code.addStatement("$1T[] %1$s = this.%2$s != null ? this.%2$s.getData() : null".formatted(name, fieldName), type());
+                    case ComponentData.EnumComponent component ->
+                            code.addStatement("$1T[] %1$s = this.%2$s != null ? this.%2$s.getData() : null".formatted(name, fieldName), type());
                     case ComponentData.SingletonEnumComponent component -> {
                     }
+                    case ComponentData.InterfaceComponent component -> {
+                        code.addStatement("$1T %1$s = this.%1$sPresent ? this.%1$s : null".formatted(fieldName), component.impl());
+                    }
                 }
+            }
+        }
+
+        @Override
+        public void loopInit(Builder code, String indexVar, boolean inline) {
+            if (data instanceof InterfaceComponent component && !inline) {
+                code.addStatement("this.%s.index = %s".formatted(fieldName, indexVar));
+            }
+        }
+
+        @Override
+        public void cleanUp(Builder code, boolean inline) {
+            if (data instanceof InterfaceComponent component && !inline) {
+                code.addStatement("this.%s.index = -1".formatted(fieldName));
             }
         }
 
@@ -374,15 +433,24 @@ public sealed interface ParameterData {
                 switch (data) {
                     case ComponentData.ClassComponent component -> code.add("%s[%s]".formatted(name, indexVar));
                     case ComponentData.EnumComponent component -> code.add("%s[%s]".formatted(name, indexVar));
-                    case ComponentData.SingletonEnumComponent component -> code.add("$1T.%s".formatted(component.instance()), component.className());
+                    case ComponentData.SingletonEnumComponent component ->
+                            code.add("$1T.%s".formatted(component.instance()), component.className());
+                    case ComponentData.InterfaceComponent component -> {
+                        code.add("this.%s".formatted(fieldName));
+                    }
                 }
             } else if (composition.none() != null && composition.none().contains(type())) {
                 code.add("null");
             } else {
                 switch (data) {
-                    case ComponentData.ClassComponent component -> code.add("%1$s != null ? %1$s[%2$s] : null".formatted(name, indexVar));
-                    case ComponentData.EnumComponent component -> code.add("%1$s != null ? %1$s[%2$s] : null".formatted(name, indexVar));
+                    case ComponentData.ClassComponent component ->
+                            code.add("%1$s != null ? %1$s[%2$s] : null".formatted(name, indexVar));
+                    case ComponentData.EnumComponent component ->
+                            code.add("%1$s != null ? %1$s[%2$s] : null".formatted(name, indexVar));
                     case ComponentData.SingletonEnumComponent component -> code.add("this.%s".formatted(fieldName));
+                    case ComponentData.InterfaceComponent component -> {
+                        code.add("%s".formatted(fieldName));
+                    }
                 }
             }
         }

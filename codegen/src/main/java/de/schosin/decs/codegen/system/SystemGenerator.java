@@ -6,11 +6,14 @@ import de.schosin.decs.codegen.system.TypeData.SystemData;
 import de.schosin.decs.codegen.system.TypeData.UtilityData;
 import de.schosin.decs.codegen.system.helper.*;
 import de.schosin.decs.codegen.system.helper.ProcessorGenerator.ProcessorResult;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod;
+import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.ArchetypeMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.CountMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.TransmuteMethod;
 import de.schosin.decs.codegen.utils.AbstractGenerator;
 import de.schosin.decs.codegen.utils.JavaType;
+import de.schosin.decs.codegen.utils.JavaType.StaticImport;
 import de.schosin.decs.codegen.utils.ParameterData.FieldProvider;
 import de.schosin.decs.codegen.utils.ParameterData.SingletonParameter;
 import de.schosin.decs.codegen.utils.ParameterData.SystemParameterData;
@@ -349,7 +352,7 @@ public final class SystemGenerator extends AbstractGenerator {
             var processorData = processor.generate(className, system, names);
             var insertedData = inserted.generate(className, system, names);
             var removedData = removed.generate(className, system, names);
-            var utilities = getUtilityResults(system, names);
+            var utilities = getUtilityResults(system, names, false);
 
             var type = TypeSpec.classBuilder(className)
                     .addAnnotation(Utils.GENERATED)
@@ -379,7 +382,32 @@ public final class SystemGenerator extends AbstractGenerator {
                     .map(FieldProvider::type)
                     .collect(Collectors.toSet());
 
-            return new SystemJavaType(system, dependencies, system.className().packageName(), type);
+            var staticImports = processStaticImports(system);
+
+            return new SystemJavaType(system, dependencies, system.className().packageName(), type, staticImports);
+        }
+
+        private static List<StaticImport> processStaticImports(SystemData system) {
+            var classes = new HashMap<ClassName, List<String>>();
+
+            for (var m : system.methods()) {
+                if (!(m instanceof EntityProcessorMethod method) || method.source() == null) {
+                    continue;
+                }
+
+                var source = method.source();
+                for (var name : source.staticImports()) {
+                    var lastDot = name.lastIndexOf('.');
+                    var className = ClassName.bestGuess(name.substring(0, lastDot));
+
+                    var names = classes.computeIfAbsent(className, ignore -> new ArrayList<>());
+                    names.add(name.substring(lastDot + 1));
+                }
+            }
+
+            return classes.entrySet().stream()
+                    .map(entry -> new StaticImport(entry.getKey(), entry.getValue().toArray(String[]::new)))
+                    .toList();
         }
 
         private MethodSpec constructor(SystemData system, List<FieldProvider> fieldProviders, ProcessorResult processorData, GeneratorResult insertedData, GeneratorResult removedData,
@@ -459,7 +487,7 @@ public final class SystemGenerator extends AbstractGenerator {
             var className = ClassName.get("", utility.className().simpleName() + "Impl");
             var names = new HashMap<String, Integer>();
 
-            var utilities = getUtilityResults(utility, names);
+            var utilities = getUtilityResults(utility, names, true);
             var requiresWorld = utilities.stream().anyMatch(result -> result.requiresWorld().get());
 
             var type = TypeSpec.classBuilder(className)
@@ -474,7 +502,7 @@ public final class SystemGenerator extends AbstractGenerator {
                     .addTypes(utilities.stream().flatMap(result -> result.types().stream()).toList())
                     .build();
 
-            return new SystemJavaType(utility, Set.of(), utility.className().packageName(), type);
+            return new SystemJavaType(utility, Set.of(), utility.className().packageName(), type, List.of());
         }
 
         private List<FieldSpec> createFields(List<GeneratorResult> utilities, boolean requiresWorld) {
@@ -522,13 +550,13 @@ public final class SystemGenerator extends AbstractGenerator {
 
     }
 
-    private List<GeneratorResult> getUtilityResults(TypeData type, Map<String, Integer> names) {
+    private List<GeneratorResult> getUtilityResults(TypeData type, Map<String, Integer> names, boolean utility) {
         return type.utils().stream()
                 .collect(Collectors.groupingBy(Object::getClass))
                 .values().stream()
                 .map(methods -> switch (methods.getFirst()) {
                     case ArchetypeMethod method ->
-                            archetype.generate(type, methods.stream().map(ArchetypeMethod.class::cast).toList(), names);
+                            archetype.generate(type, methods.stream().map(ArchetypeMethod.class::cast).toList(), names, utility);
                     case TransmuteMethod method ->
                             transmute.generate(type, methods.stream().map(TransmuteMethod.class::cast).toList(), names);
                     case CountMethod method ->
@@ -650,24 +678,23 @@ public final class SystemGenerator extends AbstractGenerator {
                         var metadata = filer.getResource(StandardLocation.CLASS_OUTPUT, "", DIR + line);
                         try (var reader = new LineNumberReader(new InputStreamReader(metadata.openInputStream(), StandardCharsets.UTF_8))) {
                             try {
-                                result.add(TypeData.readMetadata(reader, generator));
+                                result.add(TypeData.readMetadata(reader));
                             } catch (RuntimeException ex) {
                                 var writer = new StringWriter();
                                 ex.printStackTrace(new PrintWriter(writer));
 
-                                generator.printError(
-                                        "Failed to parse metadata for '%s' (line %d): %s%s%s".formatted(line, reader.getLineNumber(), ex.getMessage(), System.lineSeparator(), writer.toString()));
+                                generator.printError("Failed to parse system metadata for '%s' (line %d): %s%s%s".formatted(line, reader.getLineNumber(), ex.getMessage(), System.lineSeparator(), writer.toString()));
                             }
                         } catch (NoSuchFileException ex) {
                             if (!currentTypes.contains(line)) {
-                                generator.printError("Failed to read metadata for '%s': No such file (NoSuchFileException)".formatted(line));
+                                generator.printError("Failed to read system metadata for '%s': No such file (NoSuchFileException)".formatted(line));
                                 return result;
                             }
                         } catch (IOException ex) {
                             // Eclipse JDT does not throw NoSuchFileException
                             if (ex.getMessage().contains("does not exist")) {
                                 if (!currentTypes.contains(line)) {
-                                    generator.printError("Failed to read metadata for '%s': No such file (IOException)".formatted(line));
+                                    generator.printError("Failed to read system metadata for '%s': No such file (IOException)".formatted(line));
                                 }
 
                                 continue;
@@ -676,7 +703,7 @@ public final class SystemGenerator extends AbstractGenerator {
                             var writer = new StringWriter();
                             ex.printStackTrace(new PrintWriter(writer));
 
-                            generator.printError("Failed to read metadata for '%s': %s%s%s".formatted(line, ex.getMessage(), System.lineSeparator(), writer.toString()));
+                            generator.printError("Failed to read system metadata for '%s': %s%s%s".formatted(line, ex.getMessage(), System.lineSeparator(), writer.toString()));
                             return result;
                         }
                     }
@@ -725,6 +752,7 @@ public final class SystemGenerator extends AbstractGenerator {
         }
 
         private static void writeMetadata(TypeData typeData, SystemGenerator generator) {
+            var fqcn = typeData.className().canonicalName();
             var filer = generator.processingEnv.getFiler();
 
             try {
@@ -742,7 +770,7 @@ public final class SystemGenerator extends AbstractGenerator {
                 var writer = new StringWriter();
                 ex.printStackTrace(new PrintWriter(writer));
 
-                generator.printError("Failed to write metadata: %s%s%s".formatted(ex.getMessage(), System.lineSeparator(), writer.toString()), typeData.element());
+                generator.printError("Failed to write system metadata for '%s': %s%s%s".formatted(fqcn, ex.getMessage(), System.lineSeparator(), writer.toString()), typeData.element());
             }
         }
 
@@ -769,7 +797,7 @@ public final class SystemGenerator extends AbstractGenerator {
     }
 
     private record SystemJavaType(TypeData source, Set<TypeName> dependencies, String packageName,
-                                  TypeSpec type) implements JavaType {
+                                  TypeSpec type, List<StaticImport> staticImports) implements JavaType {
     }
 
 }

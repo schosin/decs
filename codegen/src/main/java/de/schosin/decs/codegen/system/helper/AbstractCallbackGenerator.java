@@ -144,7 +144,7 @@ abstract class AbstractCallbackGenerator<M extends CallbackMethod> extends Abstr
             var parameters = method.parameters();
 
             var fields = ProcessorGenerator.TypeGenerator.createFields(parameters, type);
-            var componentFields = ProcessorGenerator.TypeGenerator.createComponentFields(parameters, composition, type);
+            var componentFields = ProcessorGenerator.TypeGenerator.createComponentFields(parameters, composition, type, false, null);
             var entityParameter = parameters.stream().anyMatch(EntityParameter.class::isInstance);
 
             var spec = TypeSpec.classBuilder(type)
@@ -157,7 +157,7 @@ abstract class AbstractCallbackGenerator<M extends CallbackMethod> extends Abstr
                     .addField(className, "_system", Modifier.PRIVATE, Modifier.FINAL)
                     .addFields(fields)
                     .addFields(componentFields)
-                    .addMethod(ProcessorGenerator.TypeGenerator.constructor(className, parameters, composition, entityParameter))
+                    .addMethod(ProcessorGenerator.TypeGenerator.constructor(className, parameters, composition, entityParameter, false, null))
                     .addMethod(processRange(className, method, composition, entityParameter))
                     .addMethod(processBag(className, method, composition, entityParameter));
 

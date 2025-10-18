@@ -7,6 +7,7 @@ import org.jspecify.annotations.Nullable;
 import de.schosin.decs.api.World;
 import de.schosin.decs.api.exceptions.EntityDeletedException;
 import de.schosin.decs.api.exceptions.EntityModifiedException;
+import de.schosin.decs.api.internal.EntityArchetypeData;
 import de.schosin.decs.api.utils.collections.Bag;
 import de.schosin.decs.api.utils.collections.IntBag;
 
@@ -66,8 +67,18 @@ public interface EntityArchetype {
      * @param <T> type of component
      * @param type class of component
      * @return bag of component data
+     * @deprecated to be removed, most likely. we'll see about {@link EntityRef#getComponent(Class)}
      */
+    @Deprecated
     <T> Bag<T> getData(Class<T> type);
+    
+    /**
+     * Returns the underlying {@link EntityArchetypeData} holding the component data.
+     * 
+     * @param <T> type of generated implemented
+     * @return component data
+     */
+    <T extends EntityArchetypeData> T getData();
 
     /**
      * Create a batch of entities and returns the index of the first entity in this archetype.

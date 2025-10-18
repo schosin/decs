@@ -1,17 +1,15 @@
 package de.schosin.decs.codegen.system.methods;
 
+import de.schosin.decs.codegen.system.CompositionData;
+import de.schosin.decs.codegen.utils.ManifestUtils;
+import de.schosin.decs.codegen.utils.ParameterData;
+
+import javax.lang.model.element.ExecutableElement;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
-
-import javax.lang.model.element.ExecutableElement;
-
-import de.schosin.decs.codegen.system.CompositionData;
-import de.schosin.decs.codegen.utils.AbstractGenerator;
-import de.schosin.decs.codegen.utils.ManifestUtils;
-import de.schosin.decs.codegen.utils.ParameterData;
 
 /**
  * Sealed interface for annotated system callback methods.
@@ -23,11 +21,11 @@ public sealed interface CallbackMethod extends ProcessorMethod {
     @Override
     List<ParameterData> parameters();
 
-    static CallbackMethod readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+    static CallbackMethod readMetadata(BufferedReader reader) throws IOException {
         var type = reader.readLine();
         return switch (type) {
-            case InsertedMethod.TYPE -> InsertedMethod.readMetadata(reader, generator);
-            case RemovedMethod.TYPE -> RemovedMethod.readMetadata(reader, generator);
+            case InsertedMethod.TYPE -> InsertedMethod.readMetadata(reader);
+            case RemovedMethod.TYPE -> RemovedMethod.readMetadata(reader);
             default -> throw new IllegalArgumentException("Unknown callback method type '%s'. Perform a clean build.".formatted(type));
         };
     }
@@ -51,7 +49,7 @@ public sealed interface CallbackMethod extends ProcessorMethod {
             }
         }
 
-        static InsertedMethod readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+        static InsertedMethod readMetadata(BufferedReader reader) throws IOException {
             var methodName = reader.readLine();
             var compositionData = ManifestUtils.readCompositionData(reader, "@Inserted '%s'".formatted(methodName));
 
@@ -85,7 +83,7 @@ public sealed interface CallbackMethod extends ProcessorMethod {
             }
         }
 
-        static RemovedMethod readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+        static RemovedMethod readMetadata(BufferedReader reader) throws IOException {
             var methodName = reader.readLine();
             var compositionData = ManifestUtils.readCompositionData(reader, "@Removed '%s'".formatted(methodName));
 

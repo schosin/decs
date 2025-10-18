@@ -358,33 +358,33 @@ public final class CuteTest {
             this.assertions.add(it -> {
                 var warnings = it.getCompilerMessages().stream()
                         .filter(message -> (message.getKind() == Kind.WARNING || message.getKind() == Kind.MANDATORY_WARNING) && this.source.equals(message.getSource()))
-                        .count();
+                        .toList();
 
-                assertThat(warnings).as("%s has %d warnings", source, expected).isEqualTo(expected);
+                assertThat(warnings).as("%s has %d warnings", source, expected).hasSize(expected);
             });
 
             return this;
         }
 
-        public BlackBoxTestFileAssertionsAnd hasErrors(long expected) {
+        public BlackBoxTestFileAssertionsAnd hasErrors(int expected) {
             this.assertions.add(it -> {
                 var errors = it.getCompilerMessages().stream()
                         .filter(message -> message.getKind() == Kind.ERROR && this.source.equals(message.getSource()))
-                        .count();
+                        .toList();
 
-                assertThat(errors).as("%s has", source, expected).isEqualTo(expected);
+                assertThat(errors).as("%s has", source, expected).hasSize(expected);
             });
 
             return this;
         }
 
-        public BlackBoxTestFileAssertionsAnd hasNotes(long expected) {
+        public BlackBoxTestFileAssertionsAnd hasNotes(int expected) {
             this.assertions.add(it -> {
                 var errors = it.getCompilerMessages().stream()
                         .filter(message -> message.getKind() == Kind.NOTE && this.source.equals(message.getSource()))
-                        .count();
+                        .toList();
 
-                assertThat(errors).as("%s has %d notes", source, errors).isEqualTo(expected);
+                assertThat(errors).as("%s has %d notes", source, errors).hasSize(expected);
             });
 
             return this;

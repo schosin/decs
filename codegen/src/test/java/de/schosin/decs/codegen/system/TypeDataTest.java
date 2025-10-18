@@ -35,11 +35,9 @@ class TypeDataTest {
                     This line does not matter
                     """);
 
-            assertThatThrownBy(() -> TypeData.readMetadata(reader, generator))
+            assertThatThrownBy(() -> TypeData.readMetadata(reader))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Unknown type 'UNKNOWN_TYPE'. Perform a clean build.");
-
-            verifyNoInteractions(generator);
         }
 
         @ParameterizedTest
@@ -48,14 +46,12 @@ class TypeDataTest {
             var writer = createWriter();
             data.writeMetadata(writer);
 
-            var metadata = assertThat(TypeData.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(SystemData.class)).actual();
+            var metadata = assertThat(TypeData.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(SystemData.class)).actual();
             assertThat(metadata.className()).isEqualTo(data.className());
             assertThat(metadata.composition()).isEqualTo(data.composition());
             assertThat(metadata.methods()).isEqualTo(data.methods());
             assertThat(metadata.callbacks()).isEqualTo(data.callbacks());
             assertThat(metadata.utils()).isEqualTo(data.utils());
-
-            verifyNoInteractions(generator);
         }
 
         static Stream<SystemData> systemData() {
@@ -73,11 +69,9 @@ class TypeDataTest {
             var writer = createWriter();
             data.writeMetadata(writer);
 
-            var metadata = assertThat(TypeData.readMetadata(createReader(writer), generator)).asInstanceOf(InstanceOfAssertFactories.type(UtilityData.class)).actual();
+            var metadata = assertThat(TypeData.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(UtilityData.class)).actual();
             assertThat(metadata.className()).isEqualTo(data.className());
             assertThat(metadata.utils()).isEqualTo(data.utils());
-
-            verifyNoInteractions(generator);
         }
 
         static Stream<UtilityData> utilityData() {

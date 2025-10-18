@@ -1,24 +1,8 @@
 package de.schosin.decs.codegen.system.helper;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Stream;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.annotation.processing.RoundEnvironment;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.type.TypeKind;
-
-import com.palantir.javapoet.ClassName;
-import com.palantir.javapoet.CodeBlock;
-import com.palantir.javapoet.FieldSpec;
-import com.palantir.javapoet.MethodSpec;
-import com.palantir.javapoet.ParameterizedTypeName;
-import com.palantir.javapoet.TypeSpec;
-
+import com.palantir.javapoet.*;
+import de.schosin.decs.codegen.components.ComponentData.InterfaceComponent;
+import de.schosin.decs.codegen.entityarchetype.EntityArchetypeDataGenerator;
 import de.schosin.decs.codegen.system.CompositionData;
 import de.schosin.decs.codegen.system.SystemGenerator;
 import de.schosin.decs.codegen.system.TypeData.SystemData;
@@ -26,15 +10,24 @@ import de.schosin.decs.codegen.system.methods.ProcessorMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod.SystemProcessorMethod;
+import de.schosin.decs.codegen.utils.AbstractGenerator;
 import de.schosin.decs.codegen.utils.ParameterData;
-import de.schosin.decs.codegen.utils.ParameterData.ComponentParameter;
-import de.schosin.decs.codegen.utils.ParameterData.EntityIdParameter;
-import de.schosin.decs.codegen.utils.ParameterData.EntityParameter;
-import de.schosin.decs.codegen.utils.ParameterData.FieldProvider;
-import de.schosin.decs.codegen.utils.ParameterData.InvalidParameter;
-import de.schosin.decs.codegen.utils.ParameterData.LocalVariableProvider;
-import de.schosin.decs.codegen.utils.ParameterData.SystemParameterData;
+import de.schosin.decs.codegen.utils.ParameterData.*;
 import de.schosin.decs.codegen.utils.Utils;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.type.TypeKind;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ProcessorGenerator extends AbstractSystemGenerator {
 
@@ -161,7 +154,18 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
             return null;
         }
 
-        var methodData = new EntityProcessorMethod(method, method.getSimpleName().toString(), composition, parameters);
+        var inline = resolveAnnotation(method, Utils.INLINE);
+
+        var hasInterfaceComponents = parameters.stream().anyMatch(parameter -> parameter instanceof ComponentParameter component && component.data() instanceof InterfaceComponent);
+        if (inline != null && !hasInterfaceComponents) {
+            printWarning("Method does not have interface components, @Inline ignored: %s".formatted(method), method);
+            return null;
+        }
+
+        var source = inline != null ? getSource(method, parameters) : null;
+        var optimize = inline != null && !inline.getElementValues().isEmpty() && Boolean.TRUE.equals(inline.getElementValues().values().iterator().next().getValue());
+
+        var methodData = new EntityProcessorMethod(method, method.getSimpleName().toString(), composition, parameters, source, optimize);
         return new SystemData(system, systemComposition, methodData);
     }
 
@@ -244,7 +248,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
 
         // Generate code
         result.fields.add(createField(type, fieldName));
-        result.types.add(TypeGenerator.createType(className, system, method, type));
+        result.types.add(TypeGenerator.createType(className, system, method, type, generator));
 
         createRunImplementation(method, fieldName, type, result.runImpl);
         result.fieldInit.addStatement("this.%s = new $1T<>($2T.class, 4)".formatted(fieldName), Utils.BAG, type);
@@ -288,13 +292,16 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
 
     static class TypeGenerator {
 
-        public static TypeSpec createType(ClassName className, SystemData system, EntityProcessorMethod method, ClassName type) {
+        public static TypeSpec createType(ClassName className, SystemData system, EntityProcessorMethod method, ClassName type, AbstractGenerator generator) {
             var composition = method.composition() != null ? method.composition() : system.composition();
             var parameters = method.parameters();
 
+            var inline = method.source() != null;
+
             var fields = createFields(parameters, type);
-            var componentFields = createComponentFields(parameters, composition, type);
+            var componentFields = createComponentFields(parameters, composition, type, inline, generator);
             var entityParameter = parameters.stream().anyMatch(EntityParameter.class::isInstance);
+            var run = inline ? runInlined(className, method, composition, entityParameter, generator) : run(className, method, composition, entityParameter, generator);
 
             var spec = TypeSpec.classBuilder(type)
                     .addModifiers(Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
@@ -305,8 +312,8 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                     .addField(className, "_system", Modifier.PRIVATE, Modifier.FINAL)
                     .addFields(fields)
                     .addFields(componentFields)
-                    .addMethod(constructor(className, parameters, composition, entityParameter))
-                    .addMethod(run(className, method, composition, entityParameter));
+                    .addMethod(constructor(className, parameters, composition, entityParameter, inline, generator))
+                    .addMethod(run);
 
             if (entityParameter) {
                 spec.addField(FieldSpec.builder(Utils.INTERNAL_ENTITY, "_entity", Modifier.PRIVATE, Modifier.FINAL).build());
@@ -324,22 +331,24 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                     .toList();
         }
 
-        static List<FieldSpec> createComponentFields(List<ParameterData> parameters, CompositionData composition, ClassName processor) {
+        static List<FieldSpec> createComponentFields(List<ParameterData> parameters, CompositionData composition, ClassName processor, boolean inline, AbstractGenerator generator) {
             return parameters.stream()
                     .filter(ComponentParameter.class::isInstance)
                     .map(ComponentParameter.class::cast)
-                    .map(component -> component.fieldSpec(composition))
-                    .filter(Objects::nonNull)
+                    .flatMap(component -> component.fieldSpec(composition, inline, generator))
                     .distinct()
                     .toList();
         }
 
-        static MethodSpec constructor(ClassName className, List<ParameterData> parameters, CompositionData composition, boolean entityParameter) {
+        static MethodSpec constructor(ClassName className, List<ParameterData> parameters, CompositionData composition, boolean entityParameter, boolean inline, AbstractGenerator generator) {
             var code = CodeBlock.builder();
             code.addStatement("this._world = world");
             code.addStatement("this._archetype = archetype");
             code.addStatement("this._entities = archetype.getEntities()");
             code.addStatement("this._system = system");
+
+            code.add(System.lineSeparator());
+            code.addStatement("$1T _data = archetype.getData()", Utils.ENTITY_ARCHETYPE_DATA_IMPL);
 
             var fieldProviders = parameters.stream()
                     .filter(FieldProvider.class::isInstance)
@@ -363,7 +372,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                 code.add(System.lineSeparator());
 
                 for (var component : components) {
-                    component.fieldInit(code, "world", "archetype", composition);
+                    component.fieldInit(code, "world", "archetype", "_data", composition, inline, generator);
                 }
             }
 
@@ -381,7 +390,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                     .build();
         }
 
-        private static MethodSpec run(ClassName className, EntityProcessorMethod method, CompositionData composition, boolean entityParameter) {
+        private static MethodSpec run(ClassName className, EntityProcessorMethod method, CompositionData composition, boolean entityParameter, AbstractGenerator generator) {
             var code = CodeBlock.builder();
             var parameters = method.parameters();
 
@@ -422,6 +431,18 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                 code.add(System.lineSeparator());
             }
 
+            var hasLoopInit = false;
+            for (var parameter : parameters) {
+                if (parameter instanceof LoopInitProvider loopInit) {
+                    loopInit.loopInit(code, "_i", false);
+                    hasLoopInit = true;
+                }
+            }
+
+            if (hasLoopInit) {
+                code.add(System.lineSeparator());
+            }
+
             code.add("this._system.%s(".formatted(method.methodName()));
             for (int i = 0, s = parameters.size(); i < s; i++) {
                 var parameter = parameters.get(i);
@@ -444,10 +465,255 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                 code.addStatement("_entity.entityId = -1");
             }
 
+            var hasCleanUp = false;
+            for (var parameter : parameters) {
+                if (parameter instanceof CleanUpProvider cleanUp) {
+                    if (!hasCleanUp) {
+                        code.add(System.lineSeparator());
+                        hasCleanUp = true;
+                    }
+
+                    cleanUp.cleanUp(code, false);
+                }
+            }
+
             return MethodSpec.methodBuilder("run")
                     .addModifiers(Modifier.PRIVATE, Modifier.FINAL)
                     .addCode(code.build())
                     .build();
+        }
+
+        private static MethodSpec runInlined(ClassName className, EntityProcessorMethod method, CompositionData composition, boolean entityParameter, AbstractGenerator generator) {
+            var code = CodeBlock.builder();
+            var parameters = method.parameters();
+            var source = method.source();
+
+            var javaDoc = CodeBlock.builder();
+            javaDoc.add("Required imports:").add(System.lineSeparator());
+            javaDoc.add(System.lineSeparator());
+
+            var firstImport = true;
+            for (var parameter : method.parameters()) {
+                if (!firstImport) {
+                    javaDoc.add(", ");
+                }
+                firstImport = false;
+
+                if (!parameter.type().isPrimitive()) {
+                    javaDoc.add("$1T", parameter.type());
+                }
+            }
+            for (var name : source.imports()) {
+                if (!firstImport) {
+                    javaDoc.add(", ");
+                }
+                firstImport = false;
+
+                javaDoc.add("$1T", ClassName.bestGuess(name));
+            }
+
+            var sourceCode = source.source();
+            code.add("/* Original:").add(System.lineSeparator());
+            code.add(sourceCode);
+            code.add(System.lineSeparator()).add("*/").add(System.lineSeparator());
+            code.add(System.lineSeparator());
+
+            var inlinedSource = inlineSource(sourceCode, method.parameters(), method.optimize(), generator);
+            code.add("/* Modified:").add(System.lineSeparator());
+            code.add(inlinedSource);
+            code.add(System.lineSeparator()).add("*/").add(System.lineSeparator());
+            code.add(System.lineSeparator());
+
+            // Check size
+            code.add("// Return early if no entities").add(System.lineSeparator());
+            code.addStatement("int _s = this._archetype.getAlive()");
+            code.beginControlFlow("if (_s == 0)");
+            code.addStatement("return");
+            code.endControlFlow();
+            code.add(System.lineSeparator());
+
+            // Prepare local variables
+            var hasLocalVars = false;
+            for (var parameter : parameters) {
+                if (parameter instanceof LocalVariableProvider localVar) {
+                    localVar.localVariable(code, composition);
+                    hasLocalVars = true;
+                }
+
+                if (parameter instanceof ComponentParameter c && c.data() instanceof InterfaceComponent component) {
+                    for (var field : component.fields()) {
+                        var fieldSpec = EntityArchetypeDataGenerator.createInterfaceComponentField(component, field, generator);
+                        code.addStatement("$1T %1$s = this.%1$s.getData()".formatted(fieldSpec.field().name()), fieldSpec.dataType());
+                    }
+
+                    hasLocalVars = true;
+                }
+
+                if (parameter instanceof FieldProvider f && !f.fieldSpec().name().equals(parameter.name())) {
+                    code.addStatement("$1T %s = this.%s".formatted(parameter.name(), f.fieldSpec().name()), parameter.type());
+
+                    hasLocalVars = true;
+                }
+            }
+
+            if (hasLocalVars) {
+                code.add(System.lineSeparator());
+            }
+
+            code.addStatement("int[] _data = this._entities.getData()");
+            if (entityParameter) {
+                code.addStatement("$1T _entity = this._entity", Utils.INTERNAL_ENTITY);
+            }
+
+            // Iterate archetype entities
+            code.add(System.lineSeparator());
+            code.add("// Iterate entities").add(System.lineSeparator());
+            code.beginControlFlow("for (int _i = 0; _i < _s; _i++)");
+
+            if (entityParameter) {
+                code.addStatement("_entity.index = _i");
+                code.addStatement("_entity.entityId = _data[_i]");
+                code.add(System.lineSeparator());
+            }
+
+            var hasLoopInit = false;
+            for (var parameter : parameters) {
+                if (parameter instanceof LoopInitProvider loopInit) {
+                    loopInit.loopInit(code, "_i", true);
+                    hasLoopInit = true;
+                }
+            }
+
+            if (hasLoopInit) {
+                code.add(System.lineSeparator());
+            }
+
+            code.add(inlinedSource).add(System.lineSeparator());
+
+            code.endControlFlow();
+
+            if (entityParameter) {
+                // Reset entity fields to -1 to cause errors on improper use outside of the main loop
+                code.add(System.lineSeparator());
+                code.add("// Reset state to avoid improper use as Entity outside of the loop").add(System.lineSeparator());
+                code.addStatement("_entity.index = -1");
+                code.addStatement("_entity.entityId = -1");
+            }
+
+            var hasCleanUp = false;
+            for (var parameter : parameters) {
+                if (parameter instanceof CleanUpProvider cleanUp) {
+                    if (!hasCleanUp) {
+                        code.add(System.lineSeparator());
+                        hasCleanUp = true;
+                    }
+
+                    cleanUp.cleanUp(code, true);
+                }
+            }
+
+            return MethodSpec.methodBuilder("run")
+                    .addJavadoc(javaDoc.build())
+                    .addModifiers(Modifier.PRIVATE, Modifier.FINAL)
+                    .addCode(code.build())
+                    .build();
+        }
+
+        private static String inlineSource(String source, List<ParameterData> parameters, boolean optimize, AbstractGenerator generator) {
+            for (var parameter : parameters) {
+                if (parameter instanceof ComponentParameter p && p.data() instanceof InterfaceComponent component) {
+                    for (var field : component.fields()) {
+                        var fieldSpec = EntityArchetypeDataGenerator.createInterfaceComponentField(component, field, generator);
+
+                        var getter = Pattern.compile("%s.%s\\(\\)".formatted(p.name(), field.name()));
+                        source = getter.matcher(source).replaceAll("%s[_i]".formatted(fieldSpec.field().name()));
+
+                        var setter = Pattern.compile("%s.%s\\((.+)\\)".formatted(p.name(), field.name()));
+                        source = setter.matcher(source).replaceAll("%s[_i] = $1".formatted(fieldSpec.field().name()));
+
+                        if (optimize) {
+                            var lines = source.split("\\R");
+                            for (int i = 0, s = lines.length; i < s; i++) {
+                                lines[i] = InlineOptimizations.optimizeAll(lines[i]);
+                            }
+
+                            source = Arrays.stream(lines).collect(Collectors.joining(System.lineSeparator()));
+                        }
+                    }
+                }
+            }
+
+            return source;
+        }
+
+        private enum InlineOptimizations {
+
+            COMPOUND_ADD("+"),
+            COMPOUND_SUBTRACT("-"),
+            COMPOUND_MULTIPLY("*"),
+            COMPOUND_DIVIDE("/"),
+            COMPOUND_MODULO("%"),
+            COMPOUND_AND("&"),
+            COMPOUND_OR("|"),
+            COMPOUND_XOR("^"),
+            COMPOUND_SHIFT_LEFT("<<"),
+            COMPOUND_ARITHMETIC_SHIFT_RIGHT(">>"),
+            COMPOUND_LOGICAL_SHIFT_RIGHT(">>>");
+
+            private static final InlineOptimizations[] VALUES = values();
+
+            private static final String EXPR = "[a-zA-Z_][a-zA-Z0-9_\\[\\]\\.\\(\\)\\s\\+\\-\\*/]*";
+
+            private static String regex(String operator) {
+                return String.format("""
+                                (?<indent>)\\s*\
+                                (?<left>%s)\\s*=\\s*\
+                                (?<right>%s)\\s*%s\\s*\
+                                (?<expr>[^;]+)""",
+                        EXPR,
+                        EXPR,
+                        Pattern.quote(operator));
+            }
+
+            private final Pattern pattern;
+            private final String operator;
+
+            private InlineOptimizations(String operator) {
+                this.pattern = Pattern.compile(regex(operator));
+                this.operator = operator;
+            }
+
+            static String optimizeAll(String line) {
+                for (var optimization : VALUES) {
+                    line = optimization.optimize(line);
+                }
+
+                return line;
+            }
+
+            private String optimize(String line) {
+                var matcher = this.pattern.matcher(line);
+                var builder = new StringBuilder();
+
+                while (matcher.find()) {
+                    var left = matcher.group("left").trim();
+                    var right = matcher.group("right").trim();
+
+                    if (left.equals(right)) {
+                        var indent = matcher.group("indent");
+                        var expr = matcher.group("expr").trim();
+
+                        var replacement = indent + left + " " + operator + "= " + expr;
+                        matcher.appendReplacement(builder, Matcher.quoteReplacement(replacement));
+                    } else {
+                        matcher.appendReplacement(builder, Matcher.quoteReplacement(matcher.group(0)));
+                    }
+                }
+
+                matcher.appendTail(builder);
+                return builder.toString();
+            }
+
         }
 
     }

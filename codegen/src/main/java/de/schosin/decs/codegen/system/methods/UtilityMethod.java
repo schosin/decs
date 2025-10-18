@@ -3,7 +3,6 @@ package de.schosin.decs.codegen.system.methods;
 import com.palantir.javapoet.ClassName;
 import com.palantir.javapoet.TypeName;
 import de.schosin.decs.codegen.system.CompositionData;
-import de.schosin.decs.codegen.utils.AbstractGenerator;
 import de.schosin.decs.codegen.utils.ManifestUtils;
 import de.schosin.decs.codegen.utils.Parameter;
 import de.schosin.decs.codegen.utils.ParameterData.ComponentParameter;
@@ -18,12 +17,12 @@ import java.util.List;
 
 public sealed interface UtilityMethod extends EcsMethod {
 
-    static UtilityMethod readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+    static UtilityMethod readMetadata(BufferedReader reader) throws IOException {
         var type = reader.readLine();
         return switch (type) {
             case ArchetypeMethod.TYPE -> ArchetypeMethod.readMetadata(reader);
             case TransmuteMethod.TYPE -> TransmuteMethod.readMetadata(reader);
-            case CountMethod.TYPE -> CountMethod.readMetadata(reader, generator);
+            case CountMethod.TYPE -> CountMethod.readMetadata(reader);
             default ->
                     throw new IllegalArgumentException("Unknown utility method type '%s'. Perform a clean build.".formatted(type));
         };
@@ -181,7 +180,7 @@ public sealed interface UtilityMethod extends EcsMethod {
             ManifestUtils.writeCompositionData(composition, writer);
         }
 
-        public static CountMethod readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+        public static CountMethod readMetadata(BufferedReader reader) throws IOException {
             var methodName = reader.readLine();
             var composition = ManifestUtils.readCompositionData(reader, "@Count '%s'".formatted(methodName));
 

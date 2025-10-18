@@ -1,17 +1,15 @@
 package de.schosin.decs.codegen.components;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.Writer;
-import java.util.concurrent.atomic.AtomicInteger;
+import com.palantir.javapoet.ClassName;
+import de.schosin.decs.codegen.utils.*;
 
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
-
-import com.palantir.javapoet.ClassName;
-
-import de.schosin.decs.codegen.utils.ParsedType;
-import de.schosin.decs.codegen.utils.Utils;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Models the supported component types.
@@ -27,9 +25,6 @@ public sealed interface ComponentData {
     default String fieldName() {
         return Utils.decapitalize(className().simpleName()) + "Data";
     }
-    default String poolFieldName() {
-        return Utils.decapitalize(className().simpleName()) + "Pool";
-    }
 
     void writeMetadata(Writer writer) throws IOException;
 
@@ -39,7 +34,9 @@ public sealed interface ComponentData {
             case ClassComponent.TYPE -> ClassComponent.readMetadata(reader);
             case EnumComponent.TYPE -> EnumComponent.readMetadata(reader);
             case SingletonEnumComponent.TYPE -> SingletonEnumComponent.readMetadata(reader);
-            default -> throw new IllegalArgumentException("Unknown component type '%s'. Perform a clean build.".formatted(type));
+            case InterfaceComponent.TYPE -> InterfaceComponent.readMetadata(reader);
+            default ->
+                    throw new IllegalArgumentException("Unknown component type '%s'. Perform a clean build.".formatted(type));
         };
     }
 
@@ -82,7 +79,8 @@ public sealed interface ComponentData {
 
     }
 
-    record SingletonEnumComponent(DeclaredType type, TypeElement element, ClassName className, String instance) implements EnumComponentData {
+    record SingletonEnumComponent(DeclaredType type, TypeElement element, ClassName className,
+                                  String instance) implements EnumComponentData {
 
         private static final String TYPE = "SINGLETON_ENUM";
 
@@ -98,6 +96,40 @@ public sealed interface ComponentData {
             var instance = reader.readLine();
 
             return new SingletonEnumComponent(null, null, className, instance);
+        }
+
+    }
+
+    record InterfaceComponent(DeclaredType type, TypeElement element, ClassName className, ClassName impl,
+                              List<Parameter> fields) implements ComponentData {
+
+        private static final String TYPE = "INTERFACE";
+
+        public InterfaceComponent(DeclaredType type, TypeElement element, ClassName className, List<Parameter> fields) {
+            this(type, element, className, ClassName.get(className.packageName(), className.simpleName() + "Impl"), fields);
+        }
+
+        @Override
+        public void writeMetadata(Writer writer) throws IOException {
+            writer.append(TYPE).append(System.lineSeparator());
+            writer.append(className.toString()).append(System.lineSeparator());
+
+            writer.append(String.valueOf(fields.size())).append(System.lineSeparator());
+            for (var field : fields) {
+                field.writeMetadata(writer);
+            }
+        }
+
+        public static InterfaceComponent readMetadata(BufferedReader reader) throws IOException {
+            var className = ParsedType.parse(reader.readLine()).getClassName();
+
+            var count = Integer.parseInt(reader.readLine());
+            var fields = new ArrayList<Parameter>(count);
+            for (int i = 0; i < count; i++) {
+                fields.add(Parameter.readMetadata(reader));
+            }
+
+            return new InterfaceComponent(null, null, className, fields);
         }
 
     }

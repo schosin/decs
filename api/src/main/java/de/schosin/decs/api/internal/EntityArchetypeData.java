@@ -1,11 +1,10 @@
 package de.schosin.decs.api.internal;
 
-import java.util.List;
-import java.util.stream.IntStream;
+import java.util.Arrays;
+import java.util.Objects;
 
 import de.schosin.decs.api.entities.EntityArchetype;
 import de.schosin.decs.api.utils.collections.Bag;
-import de.schosin.decs.api.utils.pool.Pool;
 
 /**
  * <b>INTERNAL API:</b> This type is not intended to be used directly.
@@ -15,38 +14,44 @@ import de.schosin.decs.api.utils.pool.Pool;
  */
 public abstract class EntityArchetypeData {
 
-    private final Bag<Object>[] data;
-    private final Pool<Object>[] pools;
+    private final DataBag[] data;
+    private final DataBag[] nonNullData;
 
-    private final Bag<Object>[] unpooled;
-    private final int[] pooled;
+    private final DataBag[] unpooled;
+    @SuppressWarnings("rawtypes")
+    private final ObjectDataBag[] pooled;
 
-    EntityArchetypeData(Bag<Object>[] data, Pool<Object>[] pools) {
+    EntityArchetypeData(DataBag[] data) {
         this.data = data;
-        this.pools = pools;
+        this.nonNullData = Arrays.stream(data).filter(Objects::nonNull).toArray(DataBag[]::new);
 
-        this.unpooled = IntStream.range(0, pools.length)
-                .filter(i -> pools[i] == null)
-                .mapToObj(i -> data[i])
-                .filter(bag -> bag != null)
-                .<Bag<Object>>toArray(Bag[]::new);
+        this.unpooled = Arrays.stream(data)
+                .filter(bag -> bag != null && !(bag instanceof ObjectDataBag))
+                .toArray(DataBag[]::new);
 
-        this.pooled = IntStream.range(0, pools.length)
-                .filter(i -> pools[i] != null)
-                .toArray();
+        this.pooled = Arrays.stream(data)
+                .filter(ObjectDataBag.class::isInstance)
+                .map(ObjectDataBag.class::cast)
+                .toArray(ObjectDataBag[]::new);
     }
 
-    public final Bag<Object>[] getData() {
-        return this.data;
+    /**
+     * For debugging purposes during development, will be removed / changed to a opt-in later.
+     */
+    public void validateState(int expectedSize) {
+        for (int i = 0, s = this.nonNullData.length; i < s; i++) {
+            this.nonNullData[i].validateState(expectedSize);
+        }
     }
 
-    public final Pool<Object>[] getPools() {
-        return this.pools;
+    @Deprecated
+    public <T> Bag<T> getData(Class<T> type) {
+        throw new UnsupportedOperationException(String.format("getData(%s) not supported", type.getName()));
     }
 
     public final void ensureCapacity(int index) {
-        for (int i = 0, s = this.data.length; i < s; i++) {
-            this.data[i].ensureCapacity(index);
+        for (int i = 0, s = this.nonNullData.length; i < s; i++) {
+            this.nonNullData[i].ensureCapacity(index);
         }
     }
 
@@ -58,8 +63,7 @@ public abstract class EntityArchetypeData {
      */
     public final void initialize(int index) {
         for (int i = 0, s = this.pooled.length; i < s; i++) {
-            int componentIndex = this.pooled[i];
-            this.data[componentIndex].setUnsafe(index, this.pools[componentIndex].getInstance());
+            this.pooled[i].initialize(index);
         }
     }
 
@@ -67,8 +71,8 @@ public abstract class EntityArchetypeData {
      * Removes the components of the entity at the last index.
      */
     public final void removeLastComponents() {
-        for (int i = 0, s = this.data.length; i < s; i++) {
-            this.data[i].removeLast();
+        for (int i = 0, s = this.nonNullData.length; i < s; i++) {
+            this.nonNullData[i].removeLast();
         }
     }
 
@@ -79,9 +83,8 @@ public abstract class EntityArchetypeData {
      * @param index index of entity
      */
     public final void removeComponents(int index) {
-        for (int i = 0, s = this.data.length; i < s; i++) {
-            Bag<Object> components = this.data[i];
-            components.set(index, components.removeLast());
+        for (int i = 0, s = this.nonNullData.length; i < s; i++) {
+            this.nonNullData[i].remove(index);
         }
     }
 
@@ -94,10 +97,7 @@ public abstract class EntityArchetypeData {
         }
 
         for (int i = 0, s = this.pooled.length; i < s; i++) {
-            int componentIndex = this.pooled[i];
-
-            Object component = this.data[componentIndex].removeLast();
-            this.pools[componentIndex].free(component);
+            this.pooled[i].removeAndFreeLast();
         }
     }
 
@@ -109,18 +109,11 @@ public abstract class EntityArchetypeData {
      */
     public final void removeAndFreeComponents(int index) {
         for (int i = 0, s = this.unpooled.length; i < s; i++) {
-            Bag<Object> components = this.unpooled[i];
-            components.set(index, components.removeLast());
+            this.unpooled[i].remove(index);
         }
 
         for (int i = 0, s = this.pooled.length; i < s; i++) {
-            int componentIndex = this.pooled[i];
-            Bag<Object> components = this.data[componentIndex];
-
-            Object component = components.get(index);
-            this.pools[componentIndex].free(component);
-
-            components.set(index, components.removeLast());
+            this.pooled[i].removeAndFree(index);
         }
     }
 
@@ -133,25 +126,40 @@ public abstract class EntityArchetypeData {
     public final void removeComponents(int index, boolean[] free) {
         for (int i = 0, s = this.data.length; i < s; i++) {
             if (free[i]) {
-                Object component = this.data[i].set(index, null);
-                this.pools[i].free(component);
-
+                ((ObjectDataBag<?>) this.data[i]).clearAndFree(index);
             } else {
-                this.data[i].set(index, null);
+                DataBag data = this.data[i];
+                if (data != null) {
+                    data.clear(index);
+                }
             }
         }
     }
 
-    @SuppressWarnings("unchecked")
-    static <T> Bag<T> createBag(Class<T> component, List<Class<?>> components, int size, Bag<Bag<Object>> bags) {
-        if (!components.contains(component)) {
-            return null;
+    /**
+     * Copies entity data from this instance to the target instance.
+     * 
+     * @param sourceIndex index in this instance
+     * @param targetData target instance
+     * @param targetIndex index in target instance
+     * @param mapping mapping matching this data in length to the target component index
+     * @param create indices of components that need initialization (not in source archetype)
+     */
+    public void moveEntity(int sourceIndex, EntityArchetypeData targetData, int targetIndex, int[] mapping, int[] create) {
+        // Copy source components
+        for (int i = 0, s = mapping.length; i < s; i++) {
+            int componentIndex = mapping[i];
+            if (componentIndex > -1) {
+                this.data[i].copyTo(sourceIndex, targetData.data[componentIndex], targetIndex);
+            }
         }
 
-        Bag<T> result = new Bag<>(component, size);
-        bags.add((Bag<Object>) result);
+        // Add new components from pool
+        for (int i = 0, s = create.length; i < s; i++) {
+            int componentIndex = create[i];
+            ((ObjectDataBag<?>) targetData.data[componentIndex]).initialize(targetIndex);
+        }
 
-        return result;
     }
 
 }

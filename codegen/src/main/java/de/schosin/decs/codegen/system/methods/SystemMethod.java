@@ -1,38 +1,39 @@
 package de.schosin.decs.codegen.system.methods;
 
+import de.schosin.decs.codegen.system.CompositionData;
+import de.schosin.decs.codegen.utils.ManifestUtils;
+import de.schosin.decs.codegen.utils.ParameterData;
+import de.schosin.decs.codegen.utils.ParameterData.SystemParameterData;
+import de.schosin.decs.codegen.utils.ParameterData.UtilityParameter;
+import de.schosin.decs.codegen.utils.source.Source;
+
+import javax.lang.model.element.ExecutableElement;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.lang.model.element.ExecutableElement;
-
-import de.schosin.decs.codegen.system.CompositionData;
-import de.schosin.decs.codegen.utils.AbstractGenerator;
-import de.schosin.decs.codegen.utils.ManifestUtils;
-import de.schosin.decs.codegen.utils.ParameterData;
-import de.schosin.decs.codegen.utils.ParameterData.SystemParameterData;
-import de.schosin.decs.codegen.utils.ParameterData.UtilityParameter;
-
 /**
  * Sealed interface for annotated system methods.
  */
 public sealed interface SystemMethod extends ProcessorMethod {
 
-    static SystemMethod readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+    static SystemMethod readMetadata(BufferedReader reader) throws IOException {
         var type = reader.readLine();
         return switch (type) {
             case SystemProcessorMethod.TYPE -> SystemProcessorMethod.readMetadata(reader);
-            case EntityProcessorMethod.TYPE -> EntityProcessorMethod.readMetadata(reader, generator);
-            default -> throw new IllegalArgumentException("Unknown system method type '%s'. Perform a clean build.".formatted(type));
+            case EntityProcessorMethod.TYPE -> EntityProcessorMethod.readMetadata(reader);
+            default ->
+                    throw new IllegalArgumentException("Unknown system method type '%s'. Perform a clean build.".formatted(type));
         };
     }
 
     /**
      * Describes a {@code @SystemProcessor} method.
      */
-    record SystemProcessorMethod(ExecutableElement method, String methodName, boolean modifying, List<SystemParameterData> parameters) implements SystemMethod {
+    record SystemProcessorMethod(ExecutableElement method, String methodName, boolean modifying,
+                                 List<SystemParameterData> parameters) implements SystemMethod {
 
         static final String TYPE = "SYSTEM_PROCESSOR";
 
@@ -66,7 +67,9 @@ public sealed interface SystemMethod extends ProcessorMethod {
     /**
      * Describes a {@code @EntityProcessor} method.
      */
-    record EntityProcessorMethod(ExecutableElement method, String methodName, CompositionData composition, List<ParameterData> parameters) implements SystemMethod {
+    record EntityProcessorMethod(ExecutableElement method, String methodName, CompositionData composition,
+                                 List<ParameterData> parameters, Source source,
+                                 boolean optimize) implements SystemMethod {
 
         static final String TYPE = "ENTITY_PROCESSOR";
 
@@ -87,7 +90,7 @@ public sealed interface SystemMethod extends ProcessorMethod {
             }
         }
 
-        static EntityProcessorMethod readMetadata(BufferedReader reader, AbstractGenerator generator) throws IOException {
+        static EntityProcessorMethod readMetadata(BufferedReader reader) throws IOException {
             var methodName = reader.readLine();
             var compositionData = ManifestUtils.readCompositionData(reader, "@EntityProcessor '%s'".formatted(methodName));
 
@@ -97,7 +100,7 @@ public sealed interface SystemMethod extends ProcessorMethod {
                 parameters.add(ParameterData.readMetadata(reader));
             }
 
-            return new EntityProcessorMethod(null, methodName, compositionData, parameters);
+            return new EntityProcessorMethod(null, methodName, compositionData, parameters, null, false);
         }
 
     }

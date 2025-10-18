@@ -79,6 +79,9 @@ public final class EntityArchetypeImpl implements EntityArchetype {
     private void validateState() {
         int expected = this.entities.size();
 
+        // TODO reimplement validation
+        this.data.validateState(expected);
+        /*
         Bag<Object>[] data = this.data.getData();
         for (int c = 0, cs = data.length; c < cs; c++) {
             Bag<Object> components = data[c];
@@ -90,6 +93,7 @@ public final class EntityArchetypeImpl implements EntityArchetype {
                 }
             }
         }
+        */
 
         for (int d = 0, ds = this.deletedEntities.size(); d < ds; d++) {
             int index = deletedEntities.get(d);
@@ -220,16 +224,14 @@ public final class EntityArchetypeImpl implements EntityArchetype {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public final <T> Bag<T> getData(Class<T> type) {
-        // O(n) okay, only used at startup
-        for (int i = 0, s = components.size(); i < s; i++) {
-            if (type == components.get(i)) {
-                return (Bag<T>) this.data.getData()[i];
-            }
-        }
+        return this.data.getData(type);
+    }
 
-        return null;
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T extends EntityArchetypeData> T getData() {
+        return (T) this.data;
     }
 
     @Override
@@ -250,10 +252,10 @@ public final class EntityArchetypeImpl implements EntityArchetype {
                 this.dataLock.lock();
 
                 try {
-                    if (index >= this.entities.getCapacity()) {
+                    if (s >= this.entities.getCapacity()) {
                         this.entities.ensureCapacity(s);
                         this.references.ensureCapacity(s);
-                        this.data.ensureCapacity(index);
+                        this.data.ensureCapacity(s);
                     }
                 } finally {
                     this.dataLock.unlock();
@@ -636,10 +638,7 @@ public final class EntityArchetypeImpl implements EntityArchetype {
         private final EntityArchetypeData targetData;
 
         private final int[] mapping;
-
         private final int[] create;
-        private final int createSize;
-
         private final boolean[] free;
 
         public ArchetypeMover(EntityArchetypeImpl source, EntityArchetypeImpl target) {
@@ -656,8 +655,6 @@ public final class EntityArchetypeImpl implements EntityArchetype {
                     .filter(i -> !source.components.contains(target.components.get(i)) && Components.getMetadata(target.components.get(i)).getPool() != null)
                     .toArray();
 
-            this.createSize = this.create.length;
-
             this.free = new boolean[target.components.size()];
             for (int i = 0, s = target.components.size(); i < s; i++) {
                 Class<?> clazz = target.components.get(i);
@@ -666,26 +663,7 @@ public final class EntityArchetypeImpl implements EntityArchetype {
         }
 
         public void moveEntity(int sourceIndex, int targetIndex) {
-            Bag<Object>[] sourceData = this.sourceData.getData();
-            Bag<Object>[] targetData = this.targetData.getData();
-            Pool<Object>[] targetPools = this.targetData.getPools();
-
-            // Copy source components
-            for (int i = 0, s = this.mapping.length; i < s; i++) {
-                int componentIndex = this.mapping[i];
-                if (componentIndex > -1) {
-                    Object instance = sourceData[i].get(sourceIndex);
-                    targetData[componentIndex].set(targetIndex, instance);
-                }
-            }
-
-            // Add new components from pool
-            for (int i = 0, s = this.createSize; i < s; i++) {
-                int componentIndex = this.create[i];
-
-                Pool<Object> pool = targetPools[componentIndex];
-                targetData[componentIndex].set(targetIndex, pool.getInstance());
-            }
+            this.sourceData.moveEntity(sourceIndex, this.targetData, targetIndex, this.mapping, this.create);
         }
 
         public void deleteAddedEntity(int entityId) {

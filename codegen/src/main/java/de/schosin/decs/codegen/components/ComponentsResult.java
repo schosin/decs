@@ -1,16 +1,18 @@
 package de.schosin.decs.codegen.components;
 
-import java.util.*;
-
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
+import java.util.*;
 
 public record ComponentsResult(Map<String, ComponentData> components, List<ComponentData> sortedComponents, Map<String, Integer> selects, Map<String, Integer> reads, Map<String, Integer> writes,
         Map<String, List<TypeElement>> simpleNames) {
 
     public ComponentsResult() {
         this(new TreeMap<>(), new ArrayList<>(), new HashMap<>(), new HashMap<>(), new HashMap<>(), new HashMap<>());
+    }
+
+    public void add(ComponentData data) {
+        this.components.put(data.className().canonicalName(), data);
     }
 
     public boolean isComponent(TypeMirror type) {
@@ -23,7 +25,7 @@ public record ComponentsResult(Map<String, ComponentData> components, List<Compo
     public ComponentData getSelectedComponent(TypeMirror type) {
         var result = components.get(type.toString());
         if (result != null) {
-            this.selects.merge(result.type().toString(), 1, Integer::sum);
+            this.selects.merge(type.toString(), 1, Integer::sum);
         }
 
         return result;
@@ -35,7 +37,7 @@ public record ComponentsResult(Map<String, ComponentData> components, List<Compo
     public ComponentData getReadComponent(TypeMirror type) {
         var result = components.get(type.toString());
         if (result != null) {
-            this.reads.merge(result.type().toString(), 1, Integer::sum);
+            this.reads.merge(type.toString(), 1, Integer::sum);
         }
 
         return result;
@@ -47,22 +49,22 @@ public record ComponentsResult(Map<String, ComponentData> components, List<Compo
     public ComponentData getWrittenComponent(TypeMirror type) {
         var result = components.get(type.toString());
         if (result != null) {
-            this.writes.merge(result.type().toString(), 1, Integer::sum);
+            this.writes.merge(type.toString(), 1, Integer::sum);
         }
 
         return result;
     }
 
-    public int getSelects(DeclaredType type) {
-        return selects.getOrDefault(type.toString(), 0);
+    public int getSelects(ComponentData data) {
+        return selects.getOrDefault(data.className().canonicalName(), 0);
     }
 
-    public int getReads(DeclaredType type) {
-        return reads.getOrDefault(type.toString(), 0);
+    public int getReads(ComponentData data) {
+        return reads.getOrDefault(data.className().canonicalName(), 0);
     }
 
-    public int getWrites(DeclaredType type) {
-        return writes.getOrDefault(type.toString(), 0);
+    public int getWrites(ComponentData data) {
+        return writes.getOrDefault(data.className().canonicalName(), 0);
     }
 
 }

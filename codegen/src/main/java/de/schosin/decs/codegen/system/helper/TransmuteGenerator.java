@@ -386,6 +386,7 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
                         case ComponentData.EnumComponent c -> true;
                         case ComponentData.ClassComponent c -> false;
                         case ComponentData.SingletonEnumComponent c -> false;
+                        case ComponentData.InterfaceComponent c -> false;
                     })
                     .map(component -> FieldSpec.builder(ParameterizedTypeName.get(Utils.BAG, component.type()), component.fieldName(), Modifier.PRIVATE, Modifier.FINAL).build())
                     .toList();
@@ -395,16 +396,23 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
             var code = CodeBlock.builder();
             code.addStatement("this._system = system");
 
+            code.add(System.lineSeparator());
+            code.addStatement("$1T _data = archetype.getData()", Utils.ENTITY_ARCHETYPE_DATA_IMPL);
+
             for (var component : method.components()) {
-                code.addStatement("this.%s = archetype.getData($1T.class)".formatted(component.fieldName()), component.type());
+                code.addStatement("this.%1$s = _data.%1$s".formatted(component.fieldName()));
             }
             for (var component : method.enumComponents()) {
                 switch (component.data()) {
-                    case ComponentData.EnumComponent c ->
-                            code.addStatement("this.%s = archetype.getData($1T.class)".formatted(component.fieldName()), component.type());
+                    case ComponentData.EnumComponent c -> {
+                        code.addStatement("this.%1$s = _data.%1$s".formatted(component.fieldName()));
+                    }
                     case ComponentData.ClassComponent c -> {
                     }
                     case ComponentData.SingletonEnumComponent c -> {
+                    }
+                    case ComponentData.InterfaceComponent c -> {
+                        code.add("// TOOD initialize interface component field: %s".formatted(c.className().simpleName())).add(System.lineSeparator());
                     }
                 }
             }
@@ -435,6 +443,8 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
                         case ComponentData.ClassComponent c -> {
                         }
                         case ComponentData.SingletonEnumComponent c -> {
+                        }
+                        case ComponentData.InterfaceComponent c -> {
                         }
                     }
                 }

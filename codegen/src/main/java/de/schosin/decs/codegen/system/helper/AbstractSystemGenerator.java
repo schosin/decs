@@ -14,6 +14,7 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 
+import de.schosin.decs.codegen.components.ComponentData.InterfaceComponent;
 import de.schosin.decs.codegen.system.CompositionData;
 import de.schosin.decs.codegen.system.SystemGenerator;
 import de.schosin.decs.codegen.utils.AbstractGenerator;
@@ -21,6 +22,7 @@ import de.schosin.decs.codegen.utils.ParameterData;
 import de.schosin.decs.codegen.utils.ParameterData.ComponentParameter;
 import de.schosin.decs.codegen.utils.ParameterData.EntityParameterData;
 import de.schosin.decs.codegen.utils.Utils;
+import de.schosin.decs.codegen.utils.source.Source;
 
 abstract class AbstractSystemGenerator extends AbstractGenerator {
 
@@ -218,6 +220,10 @@ abstract class AbstractSystemGenerator extends AbstractGenerator {
         }
 
         return valid;
+    }
+
+    protected Source getSource(ExecutableElement executable, List<ParameterData> parameters) {
+        return this.sourceProvider.getSource(executable, this);
     }
 
     @Override

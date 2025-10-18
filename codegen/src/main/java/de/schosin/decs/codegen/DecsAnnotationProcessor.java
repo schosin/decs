@@ -17,6 +17,8 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.List;
 import java.util.Set;
 
@@ -40,56 +42,64 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        var buildEnv = BuildEnvironment.determine(processingEnv);
-        processingEnv.getMessager().printWarning("Round %d (over %b, env: %s): %s".formatted(++round, roundEnv.processingOver(), buildEnv, roundEnv.getRootElements()));
+        try {
+            var buildEnv = BuildEnvironment.determine(processingEnv);
+            processingEnv.getMessager().printWarning("Round %d (over %b, generated %s, env: %s): %s".formatted(++round, roundEnv.processingOver(), generated, buildEnv, roundEnv.getRootElements()));
 
-        if (generated || roundEnv.errorRaised()) {
+            if (generated || roundEnv.errorRaised()) {
+                return false;
+            }
+
+            // Get @Component types
+            var componentsGenerator = new ComponentsGenerator(processingEnv, roundEnv, components);
+            componentsGenerator.process();
+
+            if (componentsGenerator.isError()) {
+                return false;
+            }
+
+            // Generate Values
+            var valuesGenerator = new ValuesGenerator(processingEnv, roundEnv, components, values);
+            valuesGenerator.process();
+
+            if (valuesGenerator.isError()) {
+                return false;
+            }
+
+            // Generate system types
+            var systemGenerator = new SystemGenerator(processingEnv, roundEnv, components, systems);
+            systemGenerator.process();
+
+            if (systemGenerator.isError()) {
+                return false;
+            }
+
+            // Create files in last round
+            if (roundEnv.processingOver() || buildEnv.generateFirstRound()) {
+                generated = true;
+
+                var valuesType = valuesGenerator.generate();
+                writeFile(valuesType);
+
+                var components = componentsGenerator.generate();
+                writeFiles(components);
+
+                var entityArchetypeDataGenerator = new EntityArchetypeDataGenerator(processingEnv, roundEnv, this.components);
+                var entityArchetypeData = entityArchetypeDataGenerator.generate();
+                writeFile(entityArchetypeData);
+
+                var systems = systemGenerator.generate();
+                writeFiles(systems);
+            }
+
+            return true;
+        } catch (Exception ex) {
+            var writer = new StringWriter();
+            ex.printStackTrace(new PrintWriter(writer));
+
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Exception while running annotation processor: %s%s%s".formatted(ex.getMessage(), System.lineSeparator(), writer.toString()));
             return false;
         }
-
-        // Get @Component types
-        var componentsGenerator = new ComponentsGenerator(processingEnv, roundEnv, components);
-        componentsGenerator.process();
-
-        if (componentsGenerator.isError()) {
-            return false;
-        }
-
-        // Generate Values
-        var valuesGenerator = new ValuesGenerator(processingEnv, roundEnv, components, values);
-        valuesGenerator.process();
-
-        if (valuesGenerator.isError()) {
-            return false;
-        }
-
-        // Generate system types
-        var systemGenerator = new SystemGenerator(processingEnv, roundEnv, components, systems);
-        systemGenerator.process();
-
-        if (systemGenerator.isError()) {
-            return false;
-        }
-
-        // Create files in last round
-        if (roundEnv.processingOver() || buildEnv.generateFirstRound()) {
-            generated = true;
-
-            var valuesType = valuesGenerator.generate();
-            writeFile(valuesType);
-
-            var components = componentsGenerator.generate();
-            writeFiles(components);
-
-            var entityArchetypeDataGenerator = new EntityArchetypeDataGenerator(processingEnv, roundEnv, this.components);
-            var entityArchetypeData = entityArchetypeDataGenerator.generate();
-            writeFile(entityArchetypeData);
-
-            var systems = systemGenerator.generate();
-            writeFiles(systems);
-        }
-
-        return true;
     }
 
     private void writeFiles(List<JavaType> javaTypes) {
@@ -99,15 +109,28 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
     }
 
     private void writeFile(JavaType type) {
-        var file = JavaFile.builder(type.packageName(), type.type())
+        var builder = JavaFile.builder(type.packageName(), type.type())
                 .skipJavaLangImports(true)
-                .indent("    ")
-                .build();
+                .indent("    ");
+
+        for (var staticImport : type.staticImports()) {
+            builder.addStaticImport(staticImport.className(), staticImport.names());
+        }
+
+        var file = builder.build();
 
         try {
             file.writeTo(processingEnv.getFiler());
-        } catch (IOException e) {
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to write generated file: " + e.getMessage());
+        } catch (IOException ex) {
+            var writer = new StringWriter();
+            ex.printStackTrace(new PrintWriter(writer));
+
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to write generated file (IO): %s%s%s".formatted(ex.getMessage(), System.lineSeparator(), writer.toString()));
+        } catch (Exception ex) {
+            var writer = new StringWriter();
+            ex.printStackTrace(new PrintWriter(writer));
+
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Failed to write generated file: %s%s%s".formatted(ex.getMessage(), System.lineSeparator(), writer.toString()));
         }
     }
 
