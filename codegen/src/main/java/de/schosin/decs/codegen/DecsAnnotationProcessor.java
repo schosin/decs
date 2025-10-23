@@ -1,21 +1,7 @@
 package de.schosin.decs.codegen;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Set;
-
-import javax.annotation.processing.AbstractProcessor;
-import javax.annotation.processing.Processor;
-import javax.annotation.processing.RoundEnvironment;
-import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
-import javax.lang.model.SourceVersion;
-import javax.lang.model.element.TypeElement;
-import javax.tools.Diagnostic;
-
 import com.google.auto.service.AutoService;
 import com.palantir.javapoet.JavaFile;
-
 import de.schosin.decs.codegen.components.ComponentsGenerator;
 import de.schosin.decs.codegen.components.ComponentsResult;
 import de.schosin.decs.codegen.entityarchetype.EntityArchetypeDataGenerator;
@@ -25,6 +11,14 @@ import de.schosin.decs.codegen.utils.Annotations;
 import de.schosin.decs.codegen.utils.JavaType;
 import de.schosin.decs.codegen.value.ValuesGenerator;
 import de.schosin.decs.codegen.value.ValuesResult;
+
+import javax.annotation.processing.*;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.TypeElement;
+import javax.tools.Diagnostic;
+import java.io.IOException;
+import java.util.List;
+import java.util.Set;
 
 @AutoService(Processor.class)
 @SupportedAnnotationTypes({
@@ -45,7 +39,8 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        processingEnv.getMessager().printWarning("Round %d (over %s): %s".formatted(++round, roundEnv.processingOver() ? "true" : "false", roundEnv.getRootElements()));
+        var buildEnv = BuildEnvironment.determine(processingEnv);
+        processingEnv.getMessager().printWarning("Round %d (over %b, env: %s): %s".formatted(++round, roundEnv.processingOver(), buildEnv, roundEnv.getRootElements()));
 
         if (roundEnv.errorRaised()) {
             return false;
@@ -76,7 +71,7 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
         }
 
         // Create files in last round
-        if (roundEnv.processingOver()) {
+        if (roundEnv.processingOver() || buildEnv.generateFirstRound()) {
             var valuesType = valuesGenerator.generate();
             writeFile(valuesType);
 
