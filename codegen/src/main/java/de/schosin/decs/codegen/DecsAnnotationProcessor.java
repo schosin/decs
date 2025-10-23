@@ -36,13 +36,14 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
     private final SystemsResult systems = new SystemsResult();
 
     private int round;
+    private boolean generated;
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         var buildEnv = BuildEnvironment.determine(processingEnv);
         processingEnv.getMessager().printWarning("Round %d (over %b, env: %s): %s".formatted(++round, roundEnv.processingOver(), buildEnv, roundEnv.getRootElements()));
 
-        if (roundEnv.errorRaised()) {
+        if (generated || roundEnv.errorRaised()) {
             return false;
         }
 
@@ -72,6 +73,8 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
 
         // Create files in last round
         if (roundEnv.processingOver() || buildEnv.generateFirstRound()) {
+            generated = true;
+
             var valuesType = valuesGenerator.generate();
             writeFile(valuesType);
 

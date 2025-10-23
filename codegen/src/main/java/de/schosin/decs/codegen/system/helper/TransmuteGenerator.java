@@ -210,7 +210,7 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
     }
 
     public GeneratorResult generate(TypeData typeData, List<TransmuteMethod> methods, Map<String, Integer> names) {
-        var className = ClassName.get("", typeData.className().simpleName() + "Impl");
+        var systemImpl = ClassName.get("", typeData.className().simpleName() + "Impl");
 
         var result = new GeneratorResult();
 
@@ -231,11 +231,11 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
             // Generate code
             result.fields().add(createField(method, type, fieldName));
             result.methods().add(createImplementation(method, type, fieldName));
-            result.types().add(TypeGenerator.createType(className, method, type));
+            result.types().add(TypeGenerator.createType(systemImpl, method, type));
 
             // Offer archetype
             var code = result.offerArchetypeInit();
-            code.addStatement("this.%s.set(archetype.id(), new $1T(archetype))".formatted(fieldName), type);
+            code.addStatement("this.%s.set(archetype.id(), new $1T(this, archetype))".formatted(fieldName), type);
         }
 
         return result;
@@ -298,14 +298,15 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
 
     private static class TypeGenerator {
 
-        private static TypeSpec createType(ClassName className, TransmuteMethod method, ClassName type) {
+        private static TypeSpec createType(ClassName systemImpl, TransmuteMethod method, ClassName type) {
             return TypeSpec.classBuilder(type)
-                    .addModifiers(Modifier.PRIVATE, Modifier.FINAL)
+                    .addModifiers(Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
                     .addField(transmutation(method))
+                    .addField(systemImpl, "_system", Modifier.PRIVATE, Modifier.FINAL)
                     .addFields(componentFields(method))
                     .addFields(enumComponentFields(method))
-                    .addMethod(constructor(method))
-                    .addMethod(apply(className, method))
+                    .addMethod(constructor(method, systemImpl))
+                    .addMethod(apply(method))
                     .build();
         }
 
@@ -390,8 +391,9 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
                     .toList();
         }
 
-        private static MethodSpec constructor(TransmuteMethod method) {
+        private static MethodSpec constructor(TransmuteMethod method, ClassName systemImpl) {
             var code = CodeBlock.builder();
+            code.addStatement("this._system = system");
 
             for (var component : method.components()) {
                 code.addStatement("this.%s = archetype.getData($1T.class)".formatted(component.fieldName()), component.type());
@@ -409,12 +411,13 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
 
             return MethodSpec.constructorBuilder()
                     .addModifiers(Modifier.PRIVATE)
+                    .addParameter(systemImpl, "system")
                     .addParameter(Utils.ENTITY_ARCHETYPE, "archetype")
                     .addCode(code.build())
                     .build();
         }
 
-        private static MethodSpec apply(ClassName className, TransmuteMethod method) {
+        private static MethodSpec apply(TransmuteMethod method) {
             var parameters = method.parameters().stream()
                     .map(param -> ParameterSpec.builder(param.type(), param.name()).build())
                     .toList();
@@ -439,7 +442,7 @@ public class TransmuteGenerator extends AbstractUtilityGenerator {
                 code.add(System.lineSeparator());
             }
 
-            code.add("$1T.this.%s(_entityId".formatted(method.initializerName()), className);
+            code.add("this._system.%s(_entityId".formatted(method.initializerName()));
             for (var parameter : method.parameters()) {
                 code.add(", %s".formatted(parameter.name()));
             }
