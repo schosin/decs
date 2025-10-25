@@ -444,6 +444,12 @@ public final class SystemGenerator extends AbstractGenerator {
 
                 code.beginControlFlow("if ($1T.COMPOSITION.matches(archetype))", className);
                 code.addStatement("this.%s.add(new $1T(this._world, archetype, this))".formatted(fieldName), className);
+
+                // TODO naming convention in two places is not nice
+                if (processorData.fields().stream().anyMatch(field -> field.name().equals(fieldName + "Futures"))) {
+                    code.addStatement("this.%sFutures.add(null)".formatted(fieldName));
+                }
+
                 code.endControlFlow();
             }
 

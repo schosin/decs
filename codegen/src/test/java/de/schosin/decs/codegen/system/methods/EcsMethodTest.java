@@ -9,6 +9,8 @@ import de.schosin.decs.codegen.system.CompositionData;
 import de.schosin.decs.codegen.system.methods.CallbackMethod.InsertedMethod;
 import de.schosin.decs.codegen.system.methods.CallbackMethod.RemovedMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
+import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod.ParallelConfig;
+import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod.ParallelStrategy;
 import de.schosin.decs.codegen.system.methods.SystemMethod.SystemProcessorMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.ArchetypeMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.CountMethod;
@@ -68,12 +70,14 @@ class EcsMethodTest {
         void testEntityProcessorMethod(List<ParameterData> parameters) throws IOException {
             var writer = createWriter();
 
-            var method = new EntityProcessorMethod(null, "foo", new CompositionData(List.of(), null, null), parameters, null, false);
+            var parallel = new ParallelConfig(ParallelStrategy.NONE);
+            var method = new EntityProcessorMethod(null, "foo", new CompositionData(List.of(), null, null), parallel, parameters, null, false);
             method.writeMetadata(writer);
 
             var metadata = assertThat(EcsMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();
             assertThat(metadata.methodName()).isEqualTo(method.methodName());
             assertThat(metadata.composition()).isEqualTo(method.composition());
+            assertThat(metadata.parallel()).isEqualTo(method.parallel());
             assertThat(metadata.parameters()).isEqualTo(method.parameters());
 
             var systemMetadata = assertThat(SystemMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();

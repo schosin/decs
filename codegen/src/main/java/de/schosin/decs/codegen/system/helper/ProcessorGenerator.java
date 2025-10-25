@@ -9,6 +9,8 @@ import de.schosin.decs.codegen.system.TypeData.SystemData;
 import de.schosin.decs.codegen.system.methods.ProcessorMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
+import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod.ParallelConfig;
+import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod.ParallelStrategy;
 import de.schosin.decs.codegen.system.methods.SystemMethod.SystemProcessorMethod;
 import de.schosin.decs.codegen.utils.AbstractGenerator;
 import de.schosin.decs.codegen.utils.ParameterData;
@@ -24,6 +26,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -41,6 +47,8 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         }
 
     }
+
+    private static final FieldSpec EXECUTOR = FieldSpec.builder(ExecutorService.class, "_executor", Modifier.PRIVATE, Modifier.FINAL).build();
 
     public ProcessorGenerator(ProcessingEnvironment processingEnv, RoundEnvironment roundEnv, SystemGenerator generator) {
         super(processingEnv, roundEnv, generator);
@@ -154,6 +162,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
             return null;
         }
 
+        var parallel = resolveParallelStrategy(method);
         var inline = resolveAnnotation(method, Utils.INLINE);
 
         var hasInterfaceComponents = parameters.stream().anyMatch(parameter -> parameter instanceof ComponentParameter component && component.data() instanceof InterfaceComponent);
@@ -165,8 +174,21 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         var source = inline != null ? getSource(method, parameters) : null;
         var optimize = inline != null && !inline.getElementValues().isEmpty() && Boolean.TRUE.equals(inline.getElementValues().values().iterator().next().getValue());
 
-        var methodData = new EntityProcessorMethod(method, method.getSimpleName().toString(), composition, parameters, source, optimize);
+        var methodData = new EntityProcessorMethod(method, method.getSimpleName().toString(), composition, parallel, parameters, source, optimize);
         return new SystemData(system, systemComposition, methodData);
+    }
+
+    private ParallelConfig resolveParallelStrategy(ExecutableElement method) {
+        var strategy = ParallelStrategy.NONE;
+
+        var annotation = resolveAnnotation(method, Utils.ENTITY_PROCESSOR);
+        for (var entry : annotation.getElementValues().entrySet()) {
+            if (entry.getKey().getSimpleName().contentEquals("parallel")) {
+                strategy = ParallelStrategy.valueOf(entry.getValue().getValue().toString());
+            }
+        }
+
+        return new ParallelConfig(strategy);
     }
 
     public ProcessorResult generate(ClassName className, SystemData system, HashMap<String, Integer> names) {
@@ -247,26 +269,60 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         var type = ClassName.get("", typeName);
 
         // Generate code
-        result.fields.add(createField(type, fieldName));
+        result.fields.add(FieldSpec.builder(ParameterizedTypeName.get(Utils.BAG, type), fieldName, Modifier.PRIVATE, Modifier.FINAL).build());
+        result.fieldInit.addStatement("this.%s = new $1T<>($2T.class, 4)".formatted(fieldName), Utils.BAG, type);
+
         result.types.add(TypeGenerator.createType(className, system, method, type, generator));
 
-        createRunImplementation(method, fieldName, type, result.runImpl);
-        result.fieldInit.addStatement("this.%s = new $1T<>($2T.class, 4)".formatted(fieldName), Utils.BAG, type);
+        result.runImpl.add(switch (method.parallel().strategy()) {
+            case NONE -> createRunImplementation(method, fieldName, type);
+            case PER_ARCHETYPE -> createPerArchetypeRunImplementation(method, fieldName, type, result);
+        });
     }
 
-    private FieldSpec createField(ClassName type, String fieldName) {
-        var bag = ParameterizedTypeName.get(Utils.BAG, type);
+    private CodeBlock createRunImplementation(EntityProcessorMethod method, String fieldName, ClassName type) {
+        var code = CodeBlock.builder();
 
-        return FieldSpec.builder(bag, fieldName, Modifier.PRIVATE, Modifier.FINAL).build();
-    }
-
-    private void createRunImplementation(EntityProcessorMethod method, String fieldName, ClassName type, CodeBlock.Builder code) {
-        code.add("// %s%s".formatted(formatMethod(method), System.lineSeparator()));
+        code.add("// %s".formatted(formatMethod(method))).add(System.lineSeparator());
         code.addStatement("$1T[] %1$sData = this.%1$s.getData()".formatted(fieldName), type);
 
         code.beginControlFlow("for (int i = 0, s = this.%s.size(); i<s; i++)".formatted(fieldName));
         code.addStatement("%sData[i].run()".formatted(fieldName));
         code.endControlFlow();
+
+        return code.build();
+    }
+
+    private CodeBlock createPerArchetypeRunImplementation(EntityProcessorMethod method, String fieldName, ClassName type, ProcessorResult result) {
+        var future = ParameterizedTypeName.get(ClassName.get(Future.class), Utils.WILDCARD);
+        result.fields.add(FieldSpec.builder(ParameterizedTypeName.get(Utils.BAG, future), fieldName + "Futures", Modifier.PRIVATE, Modifier.FINAL).build());
+        result.fieldInit.addStatement("this.%sFutures = new $1T<>($2T.class, 4)".formatted(fieldName), Utils.BAG, Future.class);
+
+        if (!result.fields.contains(EXECUTOR)) {
+            result.fields.add(EXECUTOR);
+            result.fieldInit.addStatement("this._executor = $1T.newFixedThreadPool($2T.getRuntime().availableProcessors())", Executors.class, Runtime.class);
+        }
+
+        var code = CodeBlock.builder();
+        code.add("// %s".formatted(formatMethod(method))).add(System.lineSeparator());
+
+        code.addStatement("$1T[] %1$sData = this.%1$s.getData()".formatted(fieldName), type);
+        code.addStatement("$1T<?>[] %1$sFutures = this.%1$sFutures.getData()".formatted(fieldName), Future.class);
+        code.add(System.lineSeparator());
+
+        code.addStatement("int s = this.%s.size()".formatted(fieldName));
+        code.beginControlFlow("for (int i = 0; i < s; i++)");
+        code.addStatement("%1$sFutures[i] = this._executor.submit(%1$sData[i])".formatted(fieldName));
+        code.endControlFlow();
+        code.beginControlFlow("for (int i = 0; i < s; i++)");
+        code.beginControlFlow("try");
+        code.addStatement("%1$sFutures[i].get()".formatted(fieldName));
+        code.nextControlFlow("catch ($1T | $2T ex)", InterruptedException.class, ExecutionException.class);
+        code.addStatement("throw new $1T(\"Parallel system invocation failed for method '%s' (PER_ARCHETYPE): \" + ex.getMessage(), ex)".formatted(method.methodName()), Utils.SYSTEM_INVOCATION_EXCEPTION);
+        code.endControlFlow(); // try
+        code.endControlFlow(); // for
+
+        return code.build();
     }
 
     private String formatMethod(ProcessorMethod method) {
@@ -305,6 +361,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
 
             var spec = TypeSpec.classBuilder(type)
                     .addModifiers(Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL)
+                    .addSuperinterface(Runnable.class)
                     .addField(Utils.buildComposition(composition))
                     .addField(Utils.WORLD, "_world", Modifier.PRIVATE, Modifier.FINAL)
                     .addField(Utils.ENTITY_ARCHETYPE, "_archetype", Modifier.PRIVATE, Modifier.FINAL)
@@ -478,7 +535,8 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
             }
 
             return MethodSpec.methodBuilder("run")
-                    .addModifiers(Modifier.PRIVATE, Modifier.FINAL)
+                    .addAnnotation(Override.class)
+                    .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                     .addCode(code.build())
                     .build();
         }
@@ -614,7 +672,8 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
 
             return MethodSpec.methodBuilder("run")
                     .addJavadoc(javaDoc.build())
-                    .addModifiers(Modifier.PRIVATE, Modifier.FINAL)
+                    .addAnnotation(Override.class)
+                    .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
                     .addCode(code.build())
                     .build();
         }

@@ -1,7 +1,28 @@
 package de.schosin.decs.benchmark.system.entityprocessor;
 
-import java.util.random.RandomGenerator;
-
+import com.artemis.ArchetypeBuilder;
+import com.artemis.BaseSystem;
+import com.artemis.ComponentMapper;
+import com.artemis.EntitySubscription;
+import com.artemis.WorldConfigurationBuilder;
+import com.artemis.systems.IteratingSystem;
+import de.schosin.decs.api.World;
+import de.schosin.decs.api.annotations.composition.All;
+import de.schosin.decs.api.annotations.system.EntityProcessor;
+import de.schosin.decs.api.annotations.system.EntityProcessor.ParallelStrategy;
+import de.schosin.decs.api.annotations.utils.Archetype;
+import de.schosin.decs.api.annotations.utils.EntityInitializer;
+import de.schosin.decs.benchmark.BaseBenchmark;
+import de.schosin.decs.benchmark.components.artemisodb.ArtemisPosition;
+import de.schosin.decs.benchmark.components.artemisodb.ArtemisVelocity;
+import de.schosin.decs.benchmark.components.decs.Marker1;
+import de.schosin.decs.benchmark.components.decs.Marker2;
+import de.schosin.decs.benchmark.components.decs.Marker3;
+import de.schosin.decs.benchmark.components.decs.Marker4;
+import de.schosin.decs.benchmark.components.decs.Position;
+import de.schosin.decs.benchmark.components.decs.PositionInterface;
+import de.schosin.decs.benchmark.components.decs.Velocity;
+import de.schosin.decs.benchmark.components.decs.VelocityInterface;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Param;
@@ -9,25 +30,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import com.artemis.ArchetypeBuilder;
-import com.artemis.BaseSystem;
-import com.artemis.ComponentMapper;
-import com.artemis.EntitySubscription;
-import com.artemis.WorldConfigurationBuilder;
-import com.artemis.systems.IteratingSystem;
-
-import de.schosin.decs.api.World;
-import de.schosin.decs.api.annotations.composition.All;
-import de.schosin.decs.api.annotations.system.EntityProcessor;
-import de.schosin.decs.api.annotations.utils.Archetype;
-import de.schosin.decs.api.annotations.utils.EntityInitializer;
-import de.schosin.decs.benchmark.BaseBenchmark;
-import de.schosin.decs.benchmark.components.artemisodb.ArtemisPosition;
-import de.schosin.decs.benchmark.components.artemisodb.ArtemisVelocity;
-import de.schosin.decs.benchmark.components.decs.Position;
-import de.schosin.decs.benchmark.components.decs.PositionInterface;
-import de.schosin.decs.benchmark.components.decs.Velocity;
-import de.schosin.decs.benchmark.components.decs.VelocityInterface;
+import java.util.random.RandomGenerator;
 
 public class EntityProcessorBenchmark extends BaseBenchmark {
 
@@ -40,6 +43,7 @@ public class EntityProcessorBenchmark extends BaseBenchmark {
                 .include(benchmarkName(InterfaceDefaultComponentBenchmark.class))
                 .include(benchmarkName(InterfaceInlineComponentBenchmark.class))
                 .include(benchmarkName(InterfaceInlineOptimizedComponentBenchmark.class))
+                .include(benchmarkName(ParallelInterfaceInlineOptimizedComponentBenchmark.class))
                 .include(benchmarkName(ArtemisOdbIteratingSystemBenchmark.class))
                 .include(benchmarkName(ArtemisOdbBaseSystemBenchmark.class))
                 .build();
@@ -151,6 +155,30 @@ public class EntityProcessorBenchmark extends BaseBenchmark {
 
     }
 
+    public static class ParallelInterfaceInlineOptimizedComponentBenchmark extends DecsBenchmark {
+
+        @Setup(Level.Trial)
+        public void setup() {
+            world = World.builder()
+                    .add(ParallelInterfaceInlineOptimizedProcessingSystem.class)
+                    .build();
+
+            var count = numEntities / 4;
+
+            var entities = world.getUtility(Entities.class);
+            entities.createInterface(count, Marker1.INSTANCE);
+            entities.createInterface(count, Marker2.INSTANCE);
+            entities.createInterface(count, Marker3.INSTANCE);
+            entities.createInterface(count, Marker4.INSTANCE);
+        }
+
+        @Benchmark
+        public void process() {
+            world.process();
+        }
+
+    }
+
     public static class ClassProcessingSystem {
 
         @All({ Position.class, Velocity.class })
@@ -207,6 +235,18 @@ public class EntityProcessorBenchmark extends BaseBenchmark {
 
     }
 
+    public static class ParallelInterfaceInlineOptimizedProcessingSystem {
+
+        @All({ PositionInterface.class, VelocityInterface.class })
+        @EntityProcessor(parallel = ParallelStrategy.PER_ARCHETYPE)
+        @de.schosin.decs.api.annotations.experimental.Inline(optimize = true)
+        final void process(PositionInterface pos, VelocityInterface velocity) {
+            pos.x(pos.x() + velocity.vx());
+            pos.y(pos.y() + velocity.vy());
+        }
+
+    }
+
     public static abstract class Entities {
 
         @Archetype
@@ -226,6 +266,54 @@ public class EntityProcessorBenchmark extends BaseBenchmark {
 
         @EntityInitializer
         final void createInterface(int index, PositionInterface pos, VelocityInterface velocity) {
+            pos.x(0f);
+            pos.y(0f);
+
+            velocity.vx(-1f + 2 * RNG.nextFloat());
+            velocity.vy(-1f + 2 * RNG.nextFloat());
+        }
+
+        @Archetype
+        abstract void createInterface(int count, Marker1 marker);
+
+        @EntityInitializer
+        final void createInterface(int index, Marker1 marker, PositionInterface pos, VelocityInterface velocity) {
+            pos.x(0f);
+            pos.y(0f);
+
+            velocity.vx(-1f + 2 * RNG.nextFloat());
+            velocity.vy(-1f + 2 * RNG.nextFloat());
+        }
+
+        @Archetype
+        abstract void createInterface(int count, Marker2 marker);
+
+        @EntityInitializer
+        final void createInterface(int index, Marker2 marker, PositionInterface pos, VelocityInterface velocity) {
+            pos.x(0f);
+            pos.y(0f);
+
+            velocity.vx(-1f + 2 * RNG.nextFloat());
+            velocity.vy(-1f + 2 * RNG.nextFloat());
+        }
+
+        @Archetype
+        abstract void createInterface(int count, Marker3 marker);
+
+        @EntityInitializer
+        final void createInterface(int index, Marker3 marker, PositionInterface pos, VelocityInterface velocity) {
+            pos.x(0f);
+            pos.y(0f);
+
+            velocity.vx(-1f + 2 * RNG.nextFloat());
+            velocity.vy(-1f + 2 * RNG.nextFloat());
+        }
+
+        @Archetype
+        abstract void createInterface(int count, Marker4 marker);
+
+        @EntityInitializer
+        final void createInterface(int index, Marker4 marker, PositionInterface pos, VelocityInterface velocity) {
             pos.x(0f);
             pos.y(0f);
 

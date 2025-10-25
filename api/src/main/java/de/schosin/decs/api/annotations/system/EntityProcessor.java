@@ -70,4 +70,32 @@ import de.schosin.decs.api.builder.WorldBuilder;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.CLASS)
 public @interface EntityProcessor {
+
+    /**
+     * <b>EXPERIMENTAL:</b>
+     *
+     * <p>
+     * Configures the invocation strategy of the archetypes that are processed by this method. <br />
+     * <b>Only supports read-only workloads while concurrent writes are not fully implemented yet.</b>
+     */
+    ParallelStrategy parallel() default ParallelStrategy.NONE;
+
+    enum ParallelStrategy {
+
+        /**
+         * Generated code runs all entities sequentially.
+         */
+        NONE,
+
+        /**
+         * Generated code runs all archetypes in its own thread.
+         *
+         * <p>
+         * This strategy works best when the entities are spread across multiple archetypes and the archetypes are comparable in their number of entities.
+         *
+         */
+        PER_ARCHETYPE;
+
+    }
+
 }

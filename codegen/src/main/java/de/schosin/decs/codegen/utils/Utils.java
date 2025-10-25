@@ -33,6 +33,7 @@ public class Utils {
     public static final ClassName NONE = ClassName.get("de.schosin.decs.api.annotations.composition", "None");
 
     public static final ClassName SYSTEM_PROCESSOR = ClassName.get("de.schosin.decs.api.annotations.system", "SystemProcessor");
+    public static final ClassName ENTITY_PROCESSOR = ClassName.get("de.schosin.decs.api.annotations.system", "EntityProcessor");
 
     public static final ClassName INLINE = ClassName.get("de.schosin.decs.api.annotations.experimental", "Inline");
 
@@ -47,6 +48,8 @@ public class Utils {
     public static final ClassName COMPOSITION = ClassName.get("de.schosin.decs.api.entities", "Composition");
     public static final ClassName TRANSMUTATION = ClassName.get("de.schosin.decs.api.entities", "Transmutation");
     public static final ClassName TRANSITION = ClassName.get("de.schosin.decs.api.entities", "Transition");
+
+    public static final ClassName SYSTEM_INVOCATION_EXCEPTION = ClassName.get("de.schosin.decs.api.exceptions", "SystemInvocationException");
 
     public static final ClassName INTERNAL_WORLD = ClassName.get("de.schosin.decs.api.internal", "InternalWorld");
     public static final ClassName INTERNAL_BASE_ENTITY = ClassName.get("de.schosin.decs.api.internal", "InternalBaseEntity");

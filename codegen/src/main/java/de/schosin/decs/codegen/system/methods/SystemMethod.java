@@ -68,10 +68,18 @@ public sealed interface SystemMethod extends ProcessorMethod {
      * Describes a {@code @EntityProcessor} method.
      */
     record EntityProcessorMethod(ExecutableElement method, String methodName, CompositionData composition,
-                                 List<ParameterData> parameters, Source source,
+                                 ParallelConfig parallel, List<ParameterData> parameters, Source source,
                                  boolean optimize) implements SystemMethod {
 
         static final String TYPE = "ENTITY_PROCESSOR";
+
+
+        public enum ParallelStrategy {
+            NONE, PER_ARCHETYPE
+        }
+
+        public record ParallelConfig(ParallelStrategy strategy) {
+        }
 
         public boolean modifying() {
             // Only modifying methods (@Archetype or @Transmute) exist currently, so no further checks needd
@@ -83,6 +91,7 @@ public sealed interface SystemMethod extends ProcessorMethod {
             writer.append(TYPE).append(System.lineSeparator());
             writer.append(methodName).append(System.lineSeparator());
             ManifestUtils.writeCompositionData(composition, writer);
+            writer.append(parallel.strategy.name()).append(System.lineSeparator());
 
             writer.append(String.valueOf(parameters.size())).append(System.lineSeparator());
             for (var parameter : parameters) {
@@ -94,13 +103,15 @@ public sealed interface SystemMethod extends ProcessorMethod {
             var methodName = reader.readLine();
             var compositionData = ManifestUtils.readCompositionData(reader, "@EntityProcessor '%s'".formatted(methodName));
 
+            var parallel = new ParallelConfig(ParallelStrategy.valueOf(reader.readLine()));
+
             var count = Integer.parseInt(reader.readLine());
             var parameters = new ArrayList<ParameterData>(count);
             for (int i = 0; i < count; i++) {
                 parameters.add(ParameterData.readMetadata(reader));
             }
 
-            return new EntityProcessorMethod(null, methodName, compositionData, parameters, null, false);
+            return new EntityProcessorMethod(null, methodName, compositionData, parallel, parameters, null, false);
         }
 
     }
