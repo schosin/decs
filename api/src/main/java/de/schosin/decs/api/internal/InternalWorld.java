@@ -8,6 +8,7 @@ import de.schosin.decs.api.entities.Composition;
 import de.schosin.decs.api.entities.EntityArchetype;
 import de.schosin.decs.api.entities.EntityArchetypeListener;
 import de.schosin.decs.api.exceptions.InvalidSystemException;
+import de.schosin.decs.api.utils.locks.Locks;
 
 /**
  * <b>INTERNAL API:</b> This type is not intended to be used directly.
@@ -57,5 +58,12 @@ public interface InternalWorld extends World {
      * @param factory factory of listener
      */
     void removed(Composition composition, Function<EntityArchetype, EntityArchetypeListener> factory);
+
+    /**
+     * Returns the {@link Locks} instance of this world.
+     *
+     * @return locks instance
+     */
+    Locks getLocks();
 
 }

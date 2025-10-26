@@ -23,7 +23,7 @@ public interface SystemBuilder {
      * 
      * {@snippet:
      * MyOtherSystem otherSystem = new MyOtherSystem();
-     * World world = World.builder()
+     * World invocation = World.builder()
      *         .with(MySystem::new)
      *         .with(otherSystem::attach)
      *         .build();
@@ -41,7 +41,7 @@ public interface SystemBuilder {
      * class MyOtherSystem {
      * 
      *     MyOtherSystem() {
-     *         // initialize state not managed by the world
+     *         // initialize state not managed by the invocation
      *     }
      *     
      *     public void attach(WorldBuilder builder) {
@@ -80,7 +80,7 @@ public interface SystemBuilder {
     SystemBuilder parallel(ExecutorService executor, Consumer<SystemBuilder> consumer);
 
     /**
-     * Adds the systems to the world.
+     * Adds the systems to the invocation.
      * 
      * <p>
      * Added systems will be run in the same order as they were added.

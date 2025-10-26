@@ -131,7 +131,7 @@ abstract class AbstractCallbackGenerator<M extends CallbackMethod> extends Abstr
 
             // Generate code
             result.types().add(TypeGenerator.createType(className, system, method, type));
-            result.fieldInit().addStatement("world.%s($1T.COMPOSITION, archetype -> new $1T(world, archetype, this))".formatted(name.toLowerCase()), type);
+            result.fieldInit().addStatement("invocation.%s($1T.COMPOSITION, archetype -> new $1T(invocation, archetype, this))".formatted(name.toLowerCase()), type);
         }
 
         return result;

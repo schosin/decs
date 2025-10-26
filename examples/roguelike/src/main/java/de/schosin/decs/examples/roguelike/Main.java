@@ -94,7 +94,7 @@ import de.schosin.decs.examples.roguelike.utils.Level;
  *  </li>
  *  <li><b>System:</b> 
  *      A system is any class that contains atleast one processor or callback method.
- *      Systems are processed in the order they are added when building the world.
+ *      Systems are processed in the order they are added when building the invocation.
  *      Systems can also declare utility methods.
  *  </li>
  *  <li><b>Processor methods:</b> 
@@ -108,7 +108,7 @@ import de.schosin.decs.examples.roguelike.utils.Level;
  *  </li>
  *  <li><b>Utilities:</b>
  *      A utility is a type that only contains {@link de.schosin.decs.api.annotations.utils utility methods} and can be injected using {@link Utility @Utility}. <br />
- *      Utilities can also be obtained with {@link World#getUtility(Class)} to initialize a world by creating entities with {@link Archetype @Archetype} methods. 
+ *      Utilities can also be obtained with {@link World#getUtility(Class)} to initialize a invocation by creating entities with {@link Archetype @Archetype} methods.
  *  </li>
  *  <li><b>Archetype:</b>
  *      An archetype is both the underlying memory layout, and the utility annotation {@link Archetype @Archetype} used to create entities. <br />
@@ -141,10 +141,10 @@ public class Main {
     private static final String QUIT = "q";
 
     public static void main(String[] args) throws IOException {
-        // Singleton for rendering the world to the terminal
+        // Singleton for rendering the invocation to the terminal
         var screen = new Screen(WIDTH, HEIGHT + 1);
 
-        // Create an instance of the world
+        // Create an instance of the invocation
         var world = World.builder()
                 .singleton(screen) // pass singleton
                 .add(LevelSystem.class, InputSystem.class, CatSystem.class, RenderSystem.class) // add system types
@@ -166,7 +166,7 @@ public class Main {
         // Simple game loop
         while (true) {
             // Runs the system and processes any needed changes.
-            // Systems are run in the order they are added during world building.
+            // Systems are run in the order they are added during invocation building.
             world.process();
 
             // Prompt for user input (blocking) and write it to Values

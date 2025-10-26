@@ -5,7 +5,7 @@ import de.schosin.decs.api.annotations.system.EntityProcessor;
 import de.schosin.decs.api.annotations.utils.Archetype;
 import de.schosin.decs.api.annotations.utils.EntityInitializer;
 
-public abstract class TestSystem {
+public abstract class FooTestSystem {
 
     @All
     @EntityProcessor

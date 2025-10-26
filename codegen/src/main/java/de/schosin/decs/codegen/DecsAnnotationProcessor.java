@@ -7,10 +7,12 @@ import de.schosin.decs.codegen.components.ComponentsResult;
 import de.schosin.decs.codegen.entityarchetype.EntityArchetypeDataGenerator;
 import de.schosin.decs.codegen.system.SystemGenerator;
 import de.schosin.decs.codegen.system.SystemsResult;
+import de.schosin.decs.codegen.types.TypesGenerator;
 import de.schosin.decs.codegen.utils.Annotations;
 import de.schosin.decs.codegen.utils.JavaType;
 import de.schosin.decs.codegen.value.ValuesGenerator;
 import de.schosin.decs.codegen.value.ValuesResult;
+import de.schosin.decs.codegen.invocation.SystemInvocationGenerator;
 
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
@@ -50,7 +52,7 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
                 return false;
             }
 
-            // Get @Component types
+            // Process @Component types
             var componentsGenerator = new ComponentsGenerator(processingEnv, roundEnv, components);
             componentsGenerator.process();
 
@@ -58,7 +60,7 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
                 return false;
             }
 
-            // Generate Values
+            // Process @Value
             var valuesGenerator = new ValuesGenerator(processingEnv, roundEnv, components, values);
             valuesGenerator.process();
 
@@ -66,11 +68,19 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
                 return false;
             }
 
-            // Generate system types
+            // Process system and utility types
             var systemGenerator = new SystemGenerator(processingEnv, roundEnv, components, systems);
             systemGenerator.process();
 
             if (systemGenerator.isError()) {
+                return false;
+            }
+
+            // Process @Systems
+            var systemInvocationGenerator = new SystemInvocationGenerator(processingEnv, roundEnv, components, systems);
+            systemInvocationGenerator.process();
+
+            if (systemInvocationGenerator.isError()) {
                 return false;
             }
 
@@ -90,6 +100,13 @@ public final class DecsAnnotationProcessor extends AbstractProcessor {
 
                 var systems = systemGenerator.generate();
                 writeFiles(systems);
+
+                var systemInvocations = systemInvocationGenerator.generate();
+                writeFiles(systemInvocations);
+
+                var typesGenerator = new TypesGenerator(processingEnv, roundEnv, this.components, this.systems, systemInvocationGenerator.getImplementations());
+                var types = typesGenerator.generate();
+                writeFiles(types);
             }
 
             return true;

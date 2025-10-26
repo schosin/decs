@@ -35,10 +35,13 @@ public class Utils {
     public static final ClassName SYSTEM_PROCESSOR = ClassName.get("de.schosin.decs.api.annotations.system", "SystemProcessor");
     public static final ClassName ENTITY_PROCESSOR = ClassName.get("de.schosin.decs.api.annotations.system", "EntityProcessor");
 
+    public static final ClassName SYSTEMS = ClassName.get("de.schosin.decs.api.annotations.invocation", "Systems");
+
     public static final ClassName INLINE = ClassName.get("de.schosin.decs.api.annotations.experimental", "Inline");
 
     public static final ClassName SYSTEM_TYPE = ClassName.get("de.schosin.decs.api.systems", "SystemType");
     public static final ClassName UTILITY_TYPE = ClassName.get("de.schosin.decs.api.systems", "UtilityType");
+    public static final ClassName SYSTEM_INVOCATION = ClassName.get("de.schosin.decs.api.systems", "SystemInvocation");
 
     public static final ClassName BASE_ENTITY = ClassName.get("de.schosin.decs.api.entities", "BaseEntity");
     public static final ClassName ENTITY = ClassName.get("de.schosin.decs.api.entities", "Entity");
@@ -50,6 +53,7 @@ public class Utils {
     public static final ClassName TRANSITION = ClassName.get("de.schosin.decs.api.entities", "Transition");
 
     public static final ClassName SYSTEM_INVOCATION_EXCEPTION = ClassName.get("de.schosin.decs.api.exceptions", "SystemInvocationException");
+    public static final ClassName INVALID_SYSTEM_INVOCATION_EXCEPTION = ClassName.get("de.schosin.decs.api.exceptions", "InvalidSystemInvocationException");
 
     public static final ClassName INTERNAL_WORLD = ClassName.get("de.schosin.decs.api.internal", "InternalWorld");
     public static final ClassName INTERNAL_BASE_ENTITY = ClassName.get("de.schosin.decs.api.internal", "InternalBaseEntity");
@@ -74,9 +78,12 @@ public class Utils {
     public static final ClassName POOL = ClassName.get("de.schosin.decs.api.utils.pool", "Pool");
     public static final ClassName POOLED = ClassName.get("de.schosin.decs.api.utils.pool", "Pooled");
 
+    public static final ClassName DECS_EXECUTORS = ClassName.get("de.schosin.decs.api.utils.executors", "DecsExecutors");
+
     public static final ClassName COMPONENTS = ClassName.get("de.schosin.decs.values", "Components");
     public static final ClassName COMPONENT_METADATA = ClassName.get("de.schosin.decs.values", "ComponentMetadata");
     public static final ClassName VALUES = ClassName.get("de.schosin.decs.values", "Values");
+    public static final ClassName TYPES = ClassName.get("de.schosin.decs.values", "Types");
 
     public static final WildcardTypeName WILDCARD = WildcardTypeName.subtypeOf(Object.class);
     public static final ParameterizedTypeName CLASS_WILDCARD = ParameterizedTypeName.get(ClassName.get(Class.class), WILDCARD);

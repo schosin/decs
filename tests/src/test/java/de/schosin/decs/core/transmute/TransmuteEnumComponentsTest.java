@@ -18,18 +18,18 @@ import de.schosin.decs.tests.components.Faction;
 import de.schosin.decs.tests.components.Player;
 import de.schosin.decs.tests.components.Position;
 
-public class EnumComponentsTest {
+public class TransmuteEnumComponentsTest {
 
     @Test
     void testSystem() {
         var world = (InternalWorld) World.builder()
-                .add(EnumComponentsSystem.class)
+                .add(TransmuteEnumComponentsSystem.class)
                 .build();
 
         var utility = world.getUtility(EnumComponentsUtility.class);
         utility.create(3);
 
-        var system = world.getSystem(EnumComponentsSystem.class);
+        var system = world.getSystem(TransmuteEnumComponentsSystem.class);
 
         world.process();
         assertThat(system.add).isEqualTo(3);
@@ -38,7 +38,7 @@ public class EnumComponentsTest {
         assertThat(system.nonPlayer).isEqualTo(2);
     }
 
-    public static class EnumComponentsSystem {
+    public static class TransmuteEnumComponentsSystem {
 
         private int add;
         private int all;

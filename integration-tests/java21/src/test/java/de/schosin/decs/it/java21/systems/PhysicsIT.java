@@ -26,7 +26,7 @@ public class PhysicsIT extends AbstractIntegrationTest {
     void testSystem() {
         // Setup
         var world = (InternalWorld) World.builder()
-                .add(TestSystem.class)
+                .add(TestSystem21.class)
                 .build();
 
         var archetype = world.getUtility(TestArchetype.class);
@@ -38,13 +38,13 @@ public class PhysicsIT extends AbstractIntegrationTest {
         runSimulation(world);
 
         // Verify
-        var system = world.getSystem(TestSystem.class);
+        var system = world.getSystem(TestSystem21.class);
         assertThat(system.inserted).hasSize(3);
         assertThat(system.processed).hasSize(3);
         assertThat(system.archetypeProcessed).hasSize(3);
     }
 
-    public static class TestSystem {
+    public static class TestSystem21 {
 
         private final Set<Integer> inserted = new HashSet<>();
         private final Set<Integer> processed = new HashSet<>();

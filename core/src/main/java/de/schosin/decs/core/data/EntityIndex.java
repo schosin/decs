@@ -8,16 +8,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import de.schosin.decs.api.entities.Composition;
 import de.schosin.decs.api.entities.EntityArchetype;
 import de.schosin.decs.api.entities.EntityArchetypeListener;
 import de.schosin.decs.api.entities.Transmutation;
-import de.schosin.decs.api.internal.LockConfig;
 import de.schosin.decs.api.utils.collections.Bag;
 import de.schosin.decs.api.utils.collections.IntBag;
 import de.schosin.decs.core.CoreWorld;
@@ -32,9 +29,6 @@ public final class EntityIndex {
     private final CoreWorld world;
     private final ComponentIndex componentIndex;
 
-    private final int lockSize;
-    private final Supplier<Lock> lockSupplier;
-
     private final AtomicInteger nextEntityId = new AtomicInteger(1);
     private final IntBag entityIds = new IntBag();
 
@@ -47,12 +41,9 @@ public final class EntityIndex {
 
     private final Dirty dirty = new Dirty();
 
-    public EntityIndex(CoreWorld world, ComponentIndex componentIndex, LockConfig lockConfig) {
+    public EntityIndex(CoreWorld world, ComponentIndex componentIndex) {
         this.world = world;
         this.componentIndex = componentIndex;
-
-        this.lockSize = lockConfig.getEntitiesLockSize();
-        this.lockSupplier = lockConfig.getEntitiesLockSupplier();
     }
 
     public Collection<EntityArchetypeImpl> getArchetypes() {
@@ -110,7 +101,7 @@ public final class EntityIndex {
             return archetype;
         }
 
-        archetype = new EntityArchetypeImpl(archetypeLookup.size(), world, this, componentIndex, components, this.lockSize, this.lockSupplier);
+        archetype = new EntityArchetypeImpl(archetypeLookup.size(), world, this, componentIndex, components);
 
         for (EntityArchetypeImpl other : archetypes) {
             archetype.offerArchetype(other);

@@ -399,7 +399,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
 
         static MethodSpec constructor(ClassName className, List<ParameterData> parameters, CompositionData composition, boolean entityParameter, boolean inline, AbstractGenerator generator) {
             var code = CodeBlock.builder();
-            code.addStatement("this._world = world");
+            code.addStatement("this._world = invocation");
             code.addStatement("this._archetype = archetype");
             code.addStatement("this._entities = archetype.getEntities()");
             code.addStatement("this._system = system");
@@ -417,7 +417,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                 code.add(System.lineSeparator());
 
                 for (var fieldProvider : fieldProviders) {
-                    fieldProvider.fieldInit(code, "world", "archetype");
+                    fieldProvider.fieldInit(code, "invocation", "archetype");
                 }
             }
 
@@ -429,7 +429,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
                 code.add(System.lineSeparator());
 
                 for (var component : components) {
-                    component.fieldInit(code, "world", "archetype", "_data", composition, inline, generator);
+                    component.fieldInit(code, "invocation", "archetype", "_data", composition, inline, generator);
                 }
             }
 
@@ -440,7 +440,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
 
             return MethodSpec.constructorBuilder()
                     .addModifiers(Modifier.PRIVATE)
-                    .addParameter(Utils.WORLD, "world")
+                    .addParameter(Utils.WORLD, "invocation")
                     .addParameter(Utils.ENTITY_ARCHETYPE, "archetype")
                     .addParameter(className, "system")
                     .addCode(code.build())

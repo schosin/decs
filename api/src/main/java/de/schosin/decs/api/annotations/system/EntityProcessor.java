@@ -38,7 +38,7 @@ import de.schosin.decs.api.builder.WorldBuilder;
  *  </tr>
  *  <tr>
  *      <td>World
- *      <td>Instance of the current world
+ *      <td>Instance of the current invocation
  *  </tr>
  *  <tr>
  *      <td>@Singleton &lt;type&gt;

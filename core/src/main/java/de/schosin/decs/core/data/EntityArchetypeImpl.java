@@ -1,20 +1,7 @@
 package de.schosin.decs.core.data;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.IntStream;
-
 import de.schosin.decs.api.World;
-import de.schosin.decs.api.entities.Composition;
-import de.schosin.decs.api.entities.EntityArchetype;
-import de.schosin.decs.api.entities.EntityArchetypeListener;
-import de.schosin.decs.api.entities.Transition;
-import de.schosin.decs.api.entities.Transmutation;
+import de.schosin.decs.api.entities.*;
 import de.schosin.decs.api.exceptions.EntityDeletedException;
 import de.schosin.decs.api.exceptions.EntityModifiedException;
 import de.schosin.decs.api.internal.EntityArchetypeData;
@@ -26,6 +13,14 @@ import de.schosin.decs.api.utils.pool.Pool;
 import de.schosin.decs.api.utils.pool.Pooled;
 import de.schosin.decs.values.Components;
 import de.schosin.decs.values.Types;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
+import java.util.function.Function;
+import java.util.stream.IntStream;
 
 public final class EntityArchetypeImpl implements EntityArchetype {
 
@@ -47,10 +42,6 @@ public final class EntityArchetypeImpl implements EntityArchetype {
 
     private final Pool<EntityRefImpl> referencePool = Pool.unbounded(ENTITY_BAG_SIZE, EntityRefImpl.class, EntityRefImpl::new);
     private final Bag<Bag<EntityRefImpl>> references = new Bag<>(Bag.class, ENTITY_BAG_SIZE);
-
-    private final int lockSize;
-    private final Lock[] locks;
-    private final Lock dataLock;
 
     private final Bag<Callback> insertedCallbacks = new Bag<>(Callback.class, 8);
     private final Bag<Callback> removedCallbacks = new Bag<>(Callback.class, 8);
@@ -113,20 +104,12 @@ public final class EntityArchetypeImpl implements EntityArchetype {
         }
     }
 
-    public EntityArchetypeImpl(int id, World world, EntityIndex entityIndex, ComponentIndex componentIndex, List<Class<?>> components, int lockSize, Supplier<Lock> lock) {
+    public EntityArchetypeImpl(int id, World world, EntityIndex entityIndex, ComponentIndex componentIndex, List<Class<?>> components) {
         this.id = id;
         this.entityIndex = entityIndex;
 
         this.components = CollectionUtils.listOf(components);
         this.data = (EntityArchetypeData) Types.createArchetypeEntityData(ENTITY_BAG_SIZE, components);
-
-        this.lockSize = lockSize;
-        this.locks = new Lock[lockSize];
-        for (int i = 0; i < lockSize; i++) {
-            this.locks[i] = lock.get();
-        }
-
-        this.dataLock = lock.get();
     }
 
     public final void offerArchetype(EntityArchetypeImpl archetype) {
@@ -217,10 +200,10 @@ public final class EntityArchetypeImpl implements EntityArchetype {
         }
 
         if (moved == -1) {
-            return created == -1 ? entities.size() : created;
+            return created;
         }
 
-        return created < moved ? created : moved;
+        return Math.min(created, moved);
     }
 
     @Override
@@ -249,17 +232,9 @@ public final class EntityArchetypeImpl implements EntityArchetype {
             // Ensure capacity for data
             int s = index + count;
             if (s >= this.entities.getCapacity()) {
-                this.dataLock.lock();
-
-                try {
-                    if (s >= this.entities.getCapacity()) {
-                        this.entities.ensureCapacity(s);
-                        this.references.ensureCapacity(s);
-                        this.data.ensureCapacity(s);
-                    }
-                } finally {
-                    this.dataLock.unlock();
-                }
+                this.entities.ensureCapacity(s);
+                this.references.ensureCapacity(s);
+                this.data.ensureCapacity(s);
             }
 
             // Retrieve entity ids, initialize components
@@ -334,23 +309,13 @@ public final class EntityArchetypeImpl implements EntityArchetype {
 
     @Override
     public final Transition moveEntity(int index, Transmutation transmutation) {
-        // TODO see if lock scope can be made smaller 
-        // TODO createEntities, moveEntity, deleteEntity must not be used when processing archetype
-
         // Throw error if entity being created
         int created = this.created.get();
         if (created > -1 && index >= created) {
             throw new UnsupportedOperationException("Cannot change entities being created.");
         }
 
-        Lock lock = getLock(index);
-        lock.lock();
-
-        try {
-            return doMoveEntity(index, transmutation);
-        } finally {
-            lock.unlock();
-        }
+        return doMoveEntity(index, transmutation);
     }
 
     /**
@@ -422,17 +387,9 @@ public final class EntityArchetypeImpl implements EntityArchetype {
 
             // Ensure capacity for data
             if (index + 1 >= this.entities.getCapacity()) {
-                this.dataLock.lock();
-
-                try {
-                    if (index >= this.entities.getCapacity()) {
-                        this.entities.ensureCapacity(index);
-                        this.references.ensureCapacity(index);
-                        this.data.ensureCapacity(index);
-                    }
-                } finally {
-                    this.dataLock.unlock();
-                }
+                this.entities.ensureCapacity(index);
+                this.references.ensureCapacity(index);
+                this.data.ensureCapacity(index);
             }
 
             // Retrieve entity id
@@ -623,11 +580,6 @@ public final class EntityArchetypeImpl implements EntityArchetype {
                 .append("components = ").append(components)
                 .append(")")
                 .toString();
-    }
-
-    private Lock getLock(int index) {
-        int idx = index & (lockSize - 1);
-        return this.locks[idx];
     }
 
     private static final class ArchetypeMover {
@@ -888,10 +840,7 @@ public final class EntityArchetypeImpl implements EntityArchetype {
             return refs;
         }
 
-        Lock lock = getLock(index);
-        lock.lock();
-
-        try {
+        synchronized (this.references) {
             refs = this.references.get(index);
             if (refs != null) {
                 return refs;
@@ -901,8 +850,6 @@ public final class EntityArchetypeImpl implements EntityArchetype {
             this.references.set(index, refs);
 
             return refs;
-        } finally {
-            lock.unlock();
         }
     }
 

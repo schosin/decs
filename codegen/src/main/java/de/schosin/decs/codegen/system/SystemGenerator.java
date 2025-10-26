@@ -6,7 +6,6 @@ import de.schosin.decs.codegen.system.TypeData.SystemData;
 import de.schosin.decs.codegen.system.TypeData.UtilityData;
 import de.schosin.decs.codegen.system.helper.*;
 import de.schosin.decs.codegen.system.helper.ProcessorGenerator.ProcessorResult;
-import de.schosin.decs.codegen.system.methods.ProcessorMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.ArchetypeMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.CountMethod;
@@ -30,7 +29,6 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.NoSuchFileException;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -52,7 +50,6 @@ public final class SystemGenerator extends AbstractGenerator {
 
     private final SystemImplementation systemImpl;
     private final UtilityImplementation utilityImpl;
-    private final TypesImplementation typesImpl;
 
     public SystemGenerator(ProcessingEnvironment processingEnv, RoundEnvironment roundEnv, ComponentsResult components, SystemsResult systems) {
         super(processingEnv, roundEnv, components);
@@ -71,7 +68,6 @@ public final class SystemGenerator extends AbstractGenerator {
 
         this.systemImpl = new SystemImplementation();
         this.utilityImpl = new UtilityImplementation();
-        this.typesImpl = new TypesImplementation();
     }
 
     public void process() {
@@ -84,6 +80,9 @@ public final class SystemGenerator extends AbstractGenerator {
         if (isError() || types.isEmpty()) {
             return List.of();
         }
+
+        systems.types().clear();
+        systems.types().addAll(types);
 
         var systems = types.stream()
                 .filter(SystemData.class::isInstance)
@@ -108,226 +107,11 @@ public final class SystemGenerator extends AbstractGenerator {
         var result = new ArrayList<JavaType>();
         result.addAll(systems);
         result.addAll(utilities);
-        result.add(SystemMetadata.create());
-        result.add(typesImpl.generate(systems, utilities));
+
+        this.systems.systemJavaTypes().addAll(systems);
+        this.systems.utilityJavaTypes().addAll(utilities);
 
         return result;
-    }
-
-    private static class SystemMetadata {
-
-        private static final String PACKAGE = "de.schosin.decs.values";
-        private static final String NAME = "SystemMetadata";
-
-        public static JavaType create() {
-            // TODO move SystemMetadata to api module, remove generated type if possible
-
-            var dependenciesType = ParameterizedTypeName.get(ClassName.get(Set.class), Utils.CLASS_WILDCARD);
-            var constructorType = ParameterizedTypeName.get(ClassName.get(Function.class), ClassName.OBJECT, ClassName.OBJECT);
-
-            var type = TypeSpec.classBuilder(NAME)
-                    .addAnnotation(Utils.GENERATED)
-                    .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                    .addField(Utils.CLASS_WILDCARD, "clazz", Modifier.PRIVATE, Modifier.FINAL)
-                    .addField(Utils.CLASS_WILDCARD, "implementation", Modifier.PRIVATE, Modifier.FINAL)
-                    .addField(constructorType, "constructor", Modifier.PRIVATE, Modifier.FINAL)
-                    .addField(dependenciesType, "dependencies", Modifier.PRIVATE, Modifier.FINAL)
-                    .addMethod(constructor(constructorType, dependenciesType))
-                    .addMethod(clazzAccessor())
-                    .addMethod(implementationAccessor())
-                    .addMethod(constructorAccessor(constructorType))
-                    .addMethod(dependenciesAccessor(dependenciesType))
-                    .build();
-
-            return JavaType.create(PACKAGE, type);
-        }
-
-        private static MethodSpec constructor(ParameterizedTypeName constructorType, ParameterizedTypeName dependenciesType) {
-            var code = CodeBlock.builder()
-                    .addStatement("this.clazz = clazz")
-                    .addStatement("this.implementation = implementation")
-                    .addStatement("this.constructor = constructor")
-                    .addStatement("this.dependencies = dependencies")
-                    .build();
-
-            return MethodSpec.constructorBuilder()
-                    .addParameter(Utils.CLASS_WILDCARD, "clazz")
-                    .addParameter(Utils.CLASS_WILDCARD, "implementation")
-                    .addParameter(constructorType, "constructor")
-                    .addParameter(dependenciesType, "dependencies")
-                    .addCode(code)
-                    .build();
-        }
-
-        private static MethodSpec clazzAccessor() {
-            return MethodSpec.methodBuilder("clazz")
-                    .addModifiers(Modifier.PUBLIC)
-                    .returns(Utils.CLASS_WILDCARD)
-                    .addStatement("return this.clazz")
-                    .build();
-        }
-
-        private static MethodSpec implementationAccessor() {
-            return MethodSpec.methodBuilder("implementation")
-                    .addModifiers(Modifier.PUBLIC)
-                    .returns(Utils.CLASS_WILDCARD)
-                    .addStatement("return this.implementation")
-                    .build();
-        }
-
-        private static MethodSpec constructorAccessor(ParameterizedTypeName constructorType) {
-            return MethodSpec.methodBuilder("constructor")
-                    .addModifiers(Modifier.PUBLIC)
-                    .returns(constructorType)
-                    .addStatement("return this.constructor")
-                    .build();
-        }
-
-        private static MethodSpec dependenciesAccessor(ParameterizedTypeName dependenciesType) {
-            return MethodSpec.methodBuilder("dependencies")
-                    .addModifiers(Modifier.PUBLIC)
-                    .returns(dependenciesType)
-                    .addStatement("return this.dependencies")
-                    .build();
-        }
-
-    }
-
-    private static class TypesImplementation {
-
-        private static final String TYPES_PACKAGE = "de.schosin.decs.values";
-        private static final String TYPES_NAME = "Types";
-
-        public JavaType generate(List<SystemJavaType> systems, List<SystemJavaType> utilities) {
-            var type = TypeSpec.classBuilder(TYPES_NAME)
-                    .addAnnotation(Utils.GENERATED)
-                    .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
-                    .addField(systemsField(systems))
-                    .addStaticBlock(systemsInitializer(systems))
-                    .addMethod(getSystemMetadata(systems))
-                    .addMethod(getUtilities(utilities))
-                    .addMethod(createArchetypeEntityData())
-                    .addMethod(set())
-                    .build();
-
-            return JavaType.create(TYPES_PACKAGE, type);
-        }
-
-
-        private FieldSpec systemsField(List<SystemJavaType> systems) {
-            var metadata = ClassName.get("", "SystemMetadata");
-            var fieldType = ParameterizedTypeName.get(ClassName.get(Map.class), Utils.CLASS_WILDCARD, metadata);
-
-            return FieldSpec.builder(fieldType, "SYSTEMS", Modifier.PRIVATE, Modifier.STATIC, Modifier.FINAL).build();
-        }
-
-        private CodeBlock systemsInitializer(List<SystemJavaType> systems) {
-            var metadata = ClassName.get("", "SystemMetadata");
-            var hashMap = ParameterizedTypeName.get(ClassName.get(HashMap.class), Utils.CLASS_WILDCARD, metadata);
-
-            var code = CodeBlock.builder();
-            code.addStatement("$1T systems = new $1T()", hashMap);
-
-            for (var system : systems) {
-                var dependencies = CodeBlock.builder();
-                dependencies.add("set(");
-
-                var idx = 0;
-                for (var dependency : system.dependencies) {
-                    if (idx++ > 0) {
-                        dependencies.add(", ");
-                    }
-
-                    dependencies.add("$1T.class", dependency);
-                }
-
-                dependencies.add(")");
-
-                code.add("systems.put($1T.class, new $2T($1T.class, $3T.class, world -> new $3T(($4T) world), ", system.source.className(), metadata, system.className(), Utils.INTERNAL_WORLD);
-                code.add(dependencies.build());
-                code.addStatement("))");
-            }
-
-            code.add(System.lineSeparator());
-            code.addStatement("SYSTEMS = $1T.unmodifiableMap(systems)", Collections.class);
-
-            return code.build();
-        }
-
-        private MethodSpec getSystemMetadata(List<SystemJavaType> systems) {
-            var returnType = ClassName.get("", "SystemMetadata");
-
-            return MethodSpec.methodBuilder("getSystemMetadata")
-                    .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                    .addParameter(Utils.CLASS_WILDCARD, "clazz")
-                    .returns(returnType)
-                    .addStatement("return SYSTEMS.get(clazz)")
-                    .build();
-        }
-
-        private MethodSpec getUtilities(List<SystemJavaType> utilities) {
-            // TODO eager utility instantiation might create unused EntityArchetypes for @Archetype methods
-
-            var returnType = ParameterizedTypeName.get(ClassName.get(Map.class), Utils.CLASS_WILDCARD, ClassName.OBJECT);
-            var hashMap = ParameterizedTypeName.get(ClassName.get(HashMap.class), Utils.CLASS_WILDCARD, ClassName.OBJECT);
-
-            var code = CodeBlock.builder();
-            code.addStatement("$1T world = ($1T) arg", Utils.INTERNAL_WORLD);
-
-            code.add(System.lineSeparator());
-            code.addStatement("$1T result = new $1T()", hashMap);
-
-            for (var utility : utilities) {
-                code.addStatement("result.put($1T.class, new $2T(world))", utility.source.className(), utility.className());
-            }
-
-            code.add(System.lineSeparator());
-            code.addStatement("return result");
-
-            return MethodSpec.methodBuilder("getUtilities")
-                    .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                    .addParameter(ClassName.OBJECT, "arg")
-                    .returns(returnType)
-                    .addCode(code.build())
-                    .build();
-        }
-
-        private MethodSpec createArchetypeEntityData() {
-            var components = ParameterizedTypeName.get(ClassName.get(List.class), Utils.CLASS_WILDCARD);
-
-            return MethodSpec.methodBuilder("createArchetypeEntityData")
-                    .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                    .addParameter(TypeName.INT, "entityBagSize")
-                    .addParameter(components, "components")
-                    .returns(Object.class)
-                    .addStatement("return $1T.create(entityBagSize, components)", Utils.ENTITY_ARCHETYPE_DATA_IMPL)
-                    .build();
-        }
-
-        private MethodSpec set() {
-            var typeT = TypeVariableName.get("T");
-            var returnType = ParameterizedTypeName.get(ClassName.get(Set.class), typeT);
-            var hashSet = ParameterizedTypeName.get(ClassName.get(HashSet.class), typeT);
-
-            var code = CodeBlock.builder()
-                    .addStatement("$1T result = new $1T()", hashSet)
-                    .beginControlFlow("for (T value : values)")
-                    .addStatement("result.add(value)")
-                    .endControlFlow()
-                    .add(System.lineSeparator())
-                    .addStatement("return result")
-                    .build();
-
-            return MethodSpec.methodBuilder("set")
-                    .addAnnotation(SafeVarargs.class)
-                    .addModifiers(Modifier.PRIVATE, Modifier.STATIC)
-                    .addTypeVariable(typeT)
-                    .addParameter(ArrayTypeName.of(typeT), "values").varargs()
-                    .returns(returnType)
-                    .addCode(code)
-                    .build();
-        }
-
     }
 
     private class SystemImplementation {
@@ -336,7 +120,7 @@ public final class SystemGenerator extends AbstractGenerator {
             // TODO more tests for potential name clashes everywhere
             // TODO utilities / systems / World only used by @EntityProcessor need no fields
 
-            var className = ClassName.get("", system.className().simpleName() + "Impl");
+            var className = system.impl();
             var names = new HashMap<String, Integer>();
 
             var fieldProviders = Stream.concat(system.methods().stream(), system.callbacks().stream())
@@ -413,10 +197,10 @@ public final class SystemGenerator extends AbstractGenerator {
         private MethodSpec constructor(SystemData system, List<FieldProvider> fieldProviders, ProcessorResult processorData, GeneratorResult insertedData, GeneratorResult removedData,
                                        List<GeneratorResult> utilities) {
             var code = CodeBlock.builder();
-            code.addStatement("this._world = world");
+            code.addStatement("this._world = invocation");
 
             for (var fieldProvider : fieldProviders) {
-                fieldProvider.fieldInit(code, "world", null);
+                fieldProvider.fieldInit(code, "invocation", null);
             }
 
             code.add(processorData.fieldInit().build());
@@ -430,7 +214,7 @@ public final class SystemGenerator extends AbstractGenerator {
 
             return MethodSpec.constructorBuilder()
                     .addModifiers(Modifier.PUBLIC)
-                    .addParameter(Utils.INTERNAL_WORLD, "world")
+                    .addParameter(Utils.INTERNAL_WORLD, "invocation")
                     .addCode(code.build())
                     .build();
         }
@@ -525,7 +309,7 @@ public final class SystemGenerator extends AbstractGenerator {
         private MethodSpec constructor(List<GeneratorResult> utilities, boolean requiresWorld) {
             var code = CodeBlock.builder();
             if (requiresWorld) {
-                code.addStatement("this._world = world");
+                code.addStatement("this._world = invocation");
             }
 
             for (var utility : utilities) {
@@ -534,7 +318,7 @@ public final class SystemGenerator extends AbstractGenerator {
 
             return MethodSpec.constructorBuilder()
                     .addModifiers(Modifier.PUBLIC)
-                    .addParameter(Utils.INTERNAL_WORLD, "world")
+                    .addParameter(Utils.INTERNAL_WORLD, "invocation")
                     .addCode(code.build())
                     .build();
         }
@@ -597,6 +381,9 @@ public final class SystemGenerator extends AbstractGenerator {
             // Validate types
             var types = Set.copyOf(data.types.values());
 
+            var systems = types.stream().filter(SystemData.class::isInstance).map(SystemData.class::cast).toList();
+            validateSystemTypes(systems);
+
             var utilities = types.stream().filter(UtilityData.class::isInstance).map(UtilityData.class::cast).toList();
             validateUtilityTypes(utilities);
 
@@ -605,6 +392,22 @@ public final class SystemGenerator extends AbstractGenerator {
             }
 
             return types;
+        }
+
+        private void validateSystemTypes(List<SystemData> systems) {
+            var bySimpleName = systems.stream().collect(Collectors.groupingBy(system -> system.className().simpleName()));
+
+            for (var entry : bySimpleName.entrySet()) {
+                var value = entry.getValue();
+                if (value.size() > 1) {
+                    var name = entry.getKey();
+
+                    for (var system : value) {
+                        var others = value.stream().filter(it -> it != system).map(SystemData::className).toList();
+                        printError("Systems must not share the same simple name. Other systems with '%s': %s".formatted(name, others), system.element());
+                    }
+                }
+            }
         }
 
         private void validateUtilityTypes(List<UtilityData> types) {
@@ -762,7 +565,7 @@ public final class SystemGenerator extends AbstractGenerator {
             var filer = generator.processingEnv.getFiler();
 
             try {
-                var resourcePath = "META-INF/decs/types/%s".formatted(typeData.className().canonicalName());
+                var resourcePath = DIR + typeData.className().canonicalName();
                 var originatingElements = typeData.element() != null
                         ? new Element[]{typeData.element()}
                         : new Element[0];
@@ -802,8 +605,8 @@ public final class SystemGenerator extends AbstractGenerator {
 
     }
 
-    private record SystemJavaType(TypeData source, Set<TypeName> dependencies, String packageName,
-                                  TypeSpec type, List<StaticImport> staticImports) implements JavaType {
+    public record SystemJavaType(TypeData source, Set<TypeName> dependencies, String packageName,
+                                 TypeSpec type, List<StaticImport> staticImports) implements JavaType {
     }
 
 }

@@ -8,16 +8,23 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.util.Elements;
 
 public record Annotations(
+        TypeElement systems,
         TypeElement utility, TypeElement singleton, TypeElement value,
         TypeElement component,
         TypeElement count, TypeElement archetype, TypeElement transmute, TypeElement entityInitializer,
         TypeElement all, TypeElement one, TypeElement ones, TypeElement none,
         TypeElement systemProcessor, TypeElement entityProcessor, TypeElement inserted, TypeElement removed,
+        DeclaredType systemsType,
         DeclaredType utilityType, DeclaredType singletonType, DeclaredType valueType,
         DeclaredType componentType,
-        DeclaredType countType, DeclaredType archetypeType, DeclaredType transmuteType, DeclaredType entityInitializerType,
+        DeclaredType countType, DeclaredType archetypeType, DeclaredType transmuteType,
+        DeclaredType entityInitializerType,
         DeclaredType allType, DeclaredType oneType, DeclaredType onesType, DeclaredType noneType,
-        DeclaredType systemProcessorType, DeclaredType entityProcessorType, DeclaredType insertedType, DeclaredType removedType) {
+        DeclaredType systemProcessorType, DeclaredType entityProcessorType, DeclaredType insertedType,
+        DeclaredType removedType) {
+
+
+    public static final String SYSTEMS = "de.schosin.decs.api.annotations.invocation.Systems";
 
     public static final String UTILITY = "de.schosin.decs.api.annotations.Utility";
     public static final String SINGLETON = "de.schosin.decs.api.annotations.Singleton";
@@ -42,6 +49,7 @@ public record Annotations(
 
     public Annotations(Elements elements) {
         this(
+                elements.getTypeElement(SYSTEMS),
                 elements.getTypeElement(UTILITY),
                 elements.getTypeElement(SINGLETON),
                 elements.getTypeElement(VALUE),
@@ -59,6 +67,7 @@ public record Annotations(
                 elements.getTypeElement(INSERTED),
                 elements.getTypeElement(REMOVED),
 
+                (DeclaredType) elements.getTypeElement(SYSTEMS).asType(),
                 (DeclaredType) elements.getTypeElement(UTILITY).asType(),
                 (DeclaredType) elements.getTypeElement(SINGLETON).asType(),
                 (DeclaredType) elements.getTypeElement(VALUE).asType(),
@@ -101,10 +110,12 @@ public record Annotations(
 
             try {
                 switch (field.getAccessor().invoke(this)) {
-                    case TypeElement element when !element.getSimpleName().contentEquals(annotation) -> throw new IllegalStateException(
-                            "Element '%s' at position %d not setup properly: Expected '%s', but was '%s'".formatted(field.getName(), i, element.getSimpleName(), annotation));
-                    case DeclaredType type when !type.asElement().getSimpleName().contentEquals(annotation) -> throw new IllegalStateException(
-                            "Type '%s' at position %d not setup properly: Expected '%s', but was '%s'".formatted(field.getName(), i, type.asElement().getSimpleName(), annotation));
+                    case TypeElement element when !element.getSimpleName().contentEquals(annotation) ->
+                            throw new IllegalStateException(
+                                    "Element '%s' at position %d not setup properly: Expected '%s', but was '%s'".formatted(field.getName(), i, element.getSimpleName(), annotation));
+                    case DeclaredType type when !type.asElement().getSimpleName().contentEquals(annotation) ->
+                            throw new IllegalStateException(
+                                    "Type '%s' at position %d not setup properly: Expected '%s', but was '%s'".formatted(field.getName(), i, type.asElement().getSimpleName(), annotation));
                     default -> {
                     }
                 }

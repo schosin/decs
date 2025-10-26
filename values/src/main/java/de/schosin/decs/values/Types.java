@@ -26,7 +26,7 @@ public final class Types {
     /**
      * Creates all utilities for the world.
      * 
-     * @param world instance of world
+     * @param world instance of InternalWorld
      * @return lookup map
      */
     public static Map<Class<?>, Object> getUtilities(Object world) {
@@ -41,6 +41,17 @@ public final class Types {
      * @return instance of ArchetypeEntityData
      */
     public static Object createArchetypeEntityData(int entityBagSize, List<Class<?>> components) {
+        throw new UnsupportedOperationException(ERROR);
+    }
+
+    /**
+     * Instantiates the SystemInvocation for the given world.
+     *
+     * @param clazz class of type extending SystemInvocation
+     * @param world instance of InternalWorld
+     * @return instance of SystemInvocation
+     */
+    public static Object getSystemInvocation(Class<?> clazz, Object world) {
         throw new UnsupportedOperationException(ERROR);
     }
 

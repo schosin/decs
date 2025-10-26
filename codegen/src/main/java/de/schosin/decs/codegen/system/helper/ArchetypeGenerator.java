@@ -208,7 +208,7 @@ public class ArchetypeGenerator extends AbstractUtilityGenerator {
             result.methods().add(createImplementation(method, fieldName));
             result.types().add(TypeGenerator.createType(className, method, type, utility));
 
-            code.add("this.%s = new $1T(world.getEntityArchetype(".formatted(fieldName), type);
+            code.add("this.%s = new $1T(invocation.getEntityArchetype(".formatted(fieldName), type);
 
             var comma = false;
             for (int a = 0, as = method.components().size(); a < as; a++) {

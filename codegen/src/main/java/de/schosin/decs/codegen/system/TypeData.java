@@ -37,21 +37,27 @@ public sealed interface TypeData {
         };
     }
 
-    record SystemData(TypeElement element, ClassName className, CompositionData composition, List<SystemMethod> methods,
-            List<CallbackMethod> callbacks, List<UtilityMethod> utils) implements TypeData {
+    record SystemData(TypeElement element, ClassName className, ClassName impl, CompositionData composition,
+                      List<SystemMethod> methods,
+                      List<CallbackMethod> callbacks, List<UtilityMethod> utils) implements TypeData {
 
         private static final String TYPE = "SYSTEM";
 
         public SystemData(TypeElement element, CompositionData composition, SystemMethod method) {
-            this(element, ClassName.get(element), composition, new ArrayList<>(List.of(method)), new ArrayList<>(), new ArrayList<>());
+            this(element, ClassName.get(element), impl(element), composition, new ArrayList<>(List.of(method)), new ArrayList<>(), new ArrayList<>());
         }
 
         public SystemData(TypeElement element, CompositionData composition, CallbackMethod method) {
-            this(element, ClassName.get(element), composition, new ArrayList<>(), new ArrayList<>(List.of(method)), new ArrayList<>());
+            this(element, ClassName.get(element), impl(element), composition, new ArrayList<>(), new ArrayList<>(List.of(method)), new ArrayList<>());
         }
 
         public SystemData(TypeElement element, CompositionData composition, UtilityMethod method) {
-            this(element, ClassName.get(element), composition, new ArrayList<>(), new ArrayList<>(), new ArrayList<>(List.of(method)));
+            this(element, ClassName.get(element), impl(element), composition, new ArrayList<>(), new ArrayList<>(), new ArrayList<>(List.of(method)));
+        }
+
+        private static ClassName impl(TypeElement element) {
+            var className = ClassName.get(element);
+            return ClassName.get(className.packageName(), className.simpleName() + "Impl");
         }
 
         public boolean modifying() {
@@ -103,7 +109,8 @@ public sealed interface TypeData {
                 utils.add(UtilityMethod.readMetadata(reader));
             }
 
-            return new SystemData(null, className, compositionData, methods, callbacks, utils);
+            var impl = ClassName.get(className.packageName(), className.simpleName() + "Impl");
+            return new SystemData(null, className, impl, compositionData, methods, callbacks, utils);
         }
 
     }

@@ -24,7 +24,7 @@ public class ArchetypeTest {
         var world = (CoreWorld) World.builder().add(ArchetypeTestSystem.class).build();
 
         var archetype = world.getUtility(TestArchetype.class);
-        assertThat(archetype).as("world.createArchetype must return an instance").isNotNull();
+        assertThat(archetype).as("invocation.createArchetype must return an instance").isNotNull();
         assertThat(archetype.count).isZero();
 
         var entityArchetype = world.getEntityArchetype(Position.class, Velocity.class);
