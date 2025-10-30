@@ -6,16 +6,17 @@ import de.schosin.decs.codegen.entityarchetype.EntityArchetypeDataGenerator;
 import de.schosin.decs.codegen.system.CompositionData;
 import de.schosin.decs.codegen.system.SystemGenerator;
 import de.schosin.decs.codegen.system.TypeData.SystemData;
-import de.schosin.decs.codegen.system.methods.SystemMethod;
 import de.schosin.decs.codegen.system.methods.ProcessorMethod;
 import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod;
 import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod.ParallelConfig;
 import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod.ParallelStrategy;
 import de.schosin.decs.codegen.system.methods.ProcessorMethod.SystemProcessorMethod;
+import de.schosin.decs.codegen.system.methods.SystemMethod;
 import de.schosin.decs.codegen.utils.AbstractGenerator;
 import de.schosin.decs.codegen.utils.ParameterData;
 import de.schosin.decs.codegen.utils.ParameterData.*;
 import de.schosin.decs.codegen.utils.Utils;
+import de.schosin.decs.codegen.utils.methods.Inline;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
@@ -163,18 +164,20 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         }
 
         var parallel = resolveParallelStrategy(method);
-        var inline = resolveAnnotation(method, Utils.INLINE);
+        var inlineAnnotation = resolveAnnotation(method, Utils.INLINE);
 
         var hasInterfaceComponents = parameters.stream().anyMatch(parameter -> parameter instanceof ComponentParameter component && component.data() instanceof InterfaceComponent);
-        if (inline != null && !hasInterfaceComponents) {
+        if (inlineAnnotation != null && !hasInterfaceComponents) {
             printWarning("Method does not have interface components, @Inline ignored: %s".formatted(method), method);
             return null;
         }
 
-        var source = inline != null ? getSource(method, parameters) : null;
-        var optimize = inline != null && !inline.getElementValues().isEmpty() && Boolean.TRUE.equals(inline.getElementValues().values().iterator().next().getValue());
+        var optimize = inlineAnnotation != null && !inlineAnnotation.getElementValues().isEmpty() && Boolean.TRUE.equals(inlineAnnotation.getElementValues().values().iterator().next().getValue());
+        var inline = new Inline(inlineAnnotation != null, optimize);
 
-        var methodData = new EntityProcessorMethod(method, method.getSimpleName().toString(), composition, parallel, parameters, source, optimize);
+        var source = inlineAnnotation != null ? getSource(method, parameters) : null;
+
+        var methodData = new EntityProcessorMethod(method, method.getSimpleName().toString(), composition, parallel, parameters, inline, source);
         return new SystemData(system, systemComposition, methodData);
     }
 
@@ -352,7 +355,10 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
             var composition = method.composition() != null ? method.composition() : system.composition();
             var parameters = method.parameters();
 
-            var inline = method.source() != null;
+            var inline = method.inline().enabled();
+            if (inline && method.source() == null) {
+                generator.printWarning("Inlining not available: Source code of method '%s#%s' missing".formatted(system.className(), method.methodName()), method.method());
+            }
 
             var fields = createFields(parameters, type);
             var componentFields = createComponentFields(parameters, composition, type, inline, generator);
@@ -576,7 +582,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
             code.add(System.lineSeparator()).add("*/").add(System.lineSeparator());
             code.add(System.lineSeparator());
 
-            var inlinedSource = inlineSource(sourceCode, method.parameters(), method.optimize(), generator);
+            var inlinedSource = inlineSource(sourceCode, method.parameters(), method.inline().optimize(), generator);
             code.add("/* Modified:").add(System.lineSeparator());
             code.add(inlinedSource);
             code.add(System.lineSeparator()).add("*/").add(System.lineSeparator());

@@ -5,6 +5,7 @@ import de.schosin.decs.codegen.utils.ManifestUtils;
 import de.schosin.decs.codegen.utils.ParameterData;
 import de.schosin.decs.codegen.utils.ParameterData.SystemParameterData;
 import de.schosin.decs.codegen.utils.ParameterData.UtilityParameter;
+import de.schosin.decs.codegen.utils.methods.Inline;
 import de.schosin.decs.codegen.utils.source.Source;
 
 import javax.lang.model.element.ExecutableElement;
@@ -68,8 +69,8 @@ public sealed interface ProcessorMethod extends SystemMethod {
      * Describes a {@code @EntityProcessor} method.
      */
     record EntityProcessorMethod(ExecutableElement method, String methodName, CompositionData composition,
-                                 ParallelConfig parallel, List<ParameterData> parameters, Source source,
-                                 boolean optimize) implements ProcessorMethod {
+                                 ParallelConfig parallel, List<ParameterData> parameters, Inline inline,
+                                 Source source) implements ProcessorMethod {
 
         static final String TYPE = "ENTITY_PROCESSOR";
 
@@ -97,6 +98,9 @@ public sealed interface ProcessorMethod extends SystemMethod {
             for (var parameter : parameters) {
                 parameter.writeMetadata(writer);
             }
+
+            writer.append(inline.enabled() ? "true" : "false").append(System.lineSeparator());
+            writer.append(inline.optimize() ? "true" : "false").append(System.lineSeparator());
         }
 
         static EntityProcessorMethod readMetadata(BufferedReader reader) throws IOException {
@@ -111,7 +115,9 @@ public sealed interface ProcessorMethod extends SystemMethod {
                 parameters.add(ParameterData.readMetadata(reader));
             }
 
-            return new EntityProcessorMethod(null, methodName, compositionData, parallel, parameters, null, false);
+            var inline = new Inline("true".equals(reader.readLine()), "true".equals(reader.readLine()));
+
+            return new EntityProcessorMethod(null, methodName, compositionData, parallel, parameters, inline, null);
         }
 
     }

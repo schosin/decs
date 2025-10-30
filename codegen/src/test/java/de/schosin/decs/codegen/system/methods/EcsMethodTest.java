@@ -18,6 +18,7 @@ import de.schosin.decs.codegen.system.methods.UtilityMethod.TransmuteMethod;
 import de.schosin.decs.codegen.utils.Parameter;
 import de.schosin.decs.codegen.utils.ParameterData;
 import de.schosin.decs.codegen.utils.ParameterData.*;
+import de.schosin.decs.codegen.utils.methods.Inline;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,15 +38,16 @@ class EcsMethodTest {
     class MetadataTest extends AbstractManifestTest {
 
         @Test
-        void testUnknownType() {
-            var reader = createReader("""
+        void testUnknownType() throws IOException {
+            try (var reader = createReader("""
                     UNKNOWN_TYPE
                     This line does not matter
-                    """);
+                    """)) {
 
-            assertThatThrownBy(() -> EcsMethod.readMetadata(reader))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("Unknown method type 'UNKNOWN_TYPE'. Perform a clean build.");
+                assertThatThrownBy(() -> EcsMethod.readMetadata(reader))
+                        .isInstanceOf(IllegalArgumentException.class)
+                        .hasMessage("Unknown method type 'UNKNOWN_TYPE'. Perform a clean build.");
+            }
         }
 
         @ParameterizedTest
@@ -71,7 +73,8 @@ class EcsMethodTest {
             var writer = createWriter();
 
             var parallel = new ParallelConfig(ParallelStrategy.NONE);
-            var method = new EntityProcessorMethod(null, "foo", new CompositionData(List.of(), null, null), parallel, parameters, null, false);
+            var inline = new Inline(true, true);
+            var method = new EntityProcessorMethod(null, "foo", new CompositionData(List.of(), null, null), parallel, parameters, inline, null);
             method.writeMetadata(writer);
 
             var metadata = assertThat(EcsMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();
@@ -79,11 +82,14 @@ class EcsMethodTest {
             assertThat(metadata.composition()).isEqualTo(method.composition());
             assertThat(metadata.parallel()).isEqualTo(method.parallel());
             assertThat(metadata.parameters()).isEqualTo(method.parameters());
+            assertThat(metadata.inline()).isEqualTo(method.inline());
 
             var systemMetadata = assertThat(ProcessorMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();
             assertThat(systemMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(systemMetadata.composition()).isEqualTo(method.composition());
+            assertThat(systemMetadata.parallel()).isEqualTo(method.parallel());
             assertThat(systemMetadata.parameters()).isEqualTo(method.parameters());
+            assertThat(systemMetadata.inline()).isEqualTo(method.inline());
         }
 
         @ParameterizedTest
