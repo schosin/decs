@@ -2,7 +2,6 @@ package de.schosin.decs.codegen.system;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.io.IOException;
 import java.util.List;
@@ -20,7 +19,7 @@ import de.schosin.decs.codegen.AbstractManifestTest;
 import de.schosin.decs.codegen.system.TypeData.SystemData;
 import de.schosin.decs.codegen.system.TypeData.UtilityData;
 import de.schosin.decs.codegen.system.methods.CallbackMethod.InsertedMethod;
-import de.schosin.decs.codegen.system.methods.SystemMethod.SystemProcessorMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.SystemProcessorMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.CountMethod;
 
 class TypeDataTest {

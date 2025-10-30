@@ -3,7 +3,7 @@ package de.schosin.decs.codegen.system;
 import com.palantir.javapoet.ClassName;
 import de.schosin.decs.codegen.system.methods.CallbackMethod;
 import de.schosin.decs.codegen.system.methods.EcsMethod;
-import de.schosin.decs.codegen.system.methods.SystemMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod;
 import de.schosin.decs.codegen.utils.ManifestUtils;
 import de.schosin.decs.codegen.utils.ParsedType;
@@ -38,12 +38,12 @@ public sealed interface TypeData {
     }
 
     record SystemData(TypeElement element, ClassName className, ClassName impl, CompositionData composition,
-                      List<SystemMethod> methods,
+                      List<ProcessorMethod> methods,
                       List<CallbackMethod> callbacks, List<UtilityMethod> utils) implements TypeData {
 
         private static final String TYPE = "SYSTEM";
 
-        public SystemData(TypeElement element, CompositionData composition, SystemMethod method) {
+        public SystemData(TypeElement element, CompositionData composition, ProcessorMethod method) {
             this(element, ClassName.get(element), impl(element), composition, new ArrayList<>(List.of(method)), new ArrayList<>(), new ArrayList<>());
         }
 
@@ -92,9 +92,9 @@ public sealed interface TypeData {
             var compositionData = ManifestUtils.readCompositionData(reader, "System '%s'".formatted(className));
 
             var methodCount = Integer.parseInt(reader.readLine());
-            var methods = new ArrayList<SystemMethod>(methodCount);
+            var methods = new ArrayList<ProcessorMethod>(methodCount);
             for (int i = 0; i < methodCount; i++) {
-                methods.add(SystemMethod.readMetadata(reader));
+                methods.add(ProcessorMethod.readMetadata(reader));
             }
 
             var callbackCount = Integer.parseInt(reader.readLine());

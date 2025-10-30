@@ -6,12 +6,12 @@ import de.schosin.decs.codegen.entityarchetype.EntityArchetypeDataGenerator;
 import de.schosin.decs.codegen.system.CompositionData;
 import de.schosin.decs.codegen.system.SystemGenerator;
 import de.schosin.decs.codegen.system.TypeData.SystemData;
-import de.schosin.decs.codegen.system.methods.ProcessorMethod;
 import de.schosin.decs.codegen.system.methods.SystemMethod;
-import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
-import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod.ParallelConfig;
-import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod.ParallelStrategy;
-import de.schosin.decs.codegen.system.methods.SystemMethod.SystemProcessorMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod.ParallelConfig;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod.ParallelStrategy;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.SystemProcessorMethod;
 import de.schosin.decs.codegen.utils.AbstractGenerator;
 import de.schosin.decs.codegen.utils.ParameterData;
 import de.schosin.decs.codegen.utils.ParameterData.*;
@@ -197,7 +197,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         }
 
         var result = new ProcessorResult();
-        SystemMethod previousModifying = null;
+        ProcessorMethod previousModifying = null;
 
         var methods = system.methods();
         for (int i = 0, s = methods.size(); i < s; i++) {
@@ -243,7 +243,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         code.addStatement(")");
     }
 
-    private void processEntityMethod(ClassName className, SystemData system, EntityProcessorMethod method, HashMap<String, Integer> names, ProcessorResult result, SystemMethod previousModifying) {
+    private void processEntityMethod(ClassName className, SystemData system, EntityProcessorMethod method, HashMap<String, Integer> names, ProcessorResult result, ProcessorMethod previousModifying) {
         // Flush changes if a previous
         if (previousModifying != null) {
             // TODO two systems run in parallel, one flushes while the other writes to an archetype being flushed
@@ -325,7 +325,7 @@ public class ProcessorGenerator extends AbstractSystemGenerator {
         return code.build();
     }
 
-    private String formatMethod(ProcessorMethod method) {
+    private String formatMethod(SystemMethod method) {
         var result = new StringBuilder();
 
         result.append(method.methodName()).append("(");

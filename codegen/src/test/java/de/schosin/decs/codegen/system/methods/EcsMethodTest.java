@@ -8,10 +8,10 @@ import de.schosin.decs.codegen.components.ComponentData.EnumComponent;
 import de.schosin.decs.codegen.system.CompositionData;
 import de.schosin.decs.codegen.system.methods.CallbackMethod.InsertedMethod;
 import de.schosin.decs.codegen.system.methods.CallbackMethod.RemovedMethod;
-import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
-import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod.ParallelConfig;
-import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod.ParallelStrategy;
-import de.schosin.decs.codegen.system.methods.SystemMethod.SystemProcessorMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod.ParallelConfig;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod.ParallelStrategy;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.SystemProcessorMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.ArchetypeMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.CountMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.TransmuteMethod;
@@ -60,7 +60,7 @@ class EcsMethodTest {
             assertThat(metadata.methodName()).isEqualTo(method.methodName());
             assertThat(metadata.parameters()).isEqualTo(method.parameters());
 
-            var systemMetadata = assertThat(SystemMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(SystemProcessorMethod.class)).actual();
+            var systemMetadata = assertThat(ProcessorMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(SystemProcessorMethod.class)).actual();
             assertThat(systemMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(systemMetadata.parameters()).isEqualTo(method.parameters());
         }
@@ -80,7 +80,7 @@ class EcsMethodTest {
             assertThat(metadata.parallel()).isEqualTo(method.parallel());
             assertThat(metadata.parameters()).isEqualTo(method.parameters());
 
-            var systemMetadata = assertThat(SystemMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();
+            var systemMetadata = assertThat(ProcessorMethod.readMetadata(createReader(writer))).asInstanceOf(InstanceOfAssertFactories.type(EntityProcessorMethod.class)).actual();
             assertThat(systemMetadata.methodName()).isEqualTo(method.methodName());
             assertThat(systemMetadata.composition()).isEqualTo(method.composition());
             assertThat(systemMetadata.parameters()).isEqualTo(method.parameters());

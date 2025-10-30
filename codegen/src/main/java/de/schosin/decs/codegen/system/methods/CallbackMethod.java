@@ -14,7 +14,7 @@ import java.util.List;
 /**
  * Sealed interface for annotated system callback methods.
  */
-public sealed interface CallbackMethod extends ProcessorMethod {
+public sealed interface CallbackMethod extends SystemMethod {
 
     CompositionData composition();
 

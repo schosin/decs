@@ -2,8 +2,8 @@ package de.schosin.decs.codegen.system.methods;
 
 import de.schosin.decs.codegen.system.methods.CallbackMethod.InsertedMethod;
 import de.schosin.decs.codegen.system.methods.CallbackMethod.RemovedMethod;
-import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
-import de.schosin.decs.codegen.system.methods.SystemMethod.SystemProcessorMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.SystemProcessorMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.ArchetypeMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.CountMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.TransmuteMethod;
@@ -16,7 +16,7 @@ import java.io.Writer;
 /**
  * Base interface for annotated methods.
  */
-public sealed interface EcsMethod permits ProcessorMethod, UtilityMethod {
+public sealed interface EcsMethod permits SystemMethod, UtilityMethod {
 
     ExecutableElement method();
 

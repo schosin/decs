@@ -6,7 +6,7 @@ import de.schosin.decs.codegen.system.TypeData.SystemData;
 import de.schosin.decs.codegen.system.TypeData.UtilityData;
 import de.schosin.decs.codegen.system.helper.*;
 import de.schosin.decs.codegen.system.helper.ProcessorGenerator.ProcessorResult;
-import de.schosin.decs.codegen.system.methods.SystemMethod.EntityProcessorMethod;
+import de.schosin.decs.codegen.system.methods.ProcessorMethod.EntityProcessorMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.ArchetypeMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.CountMethod;
 import de.schosin.decs.codegen.system.methods.UtilityMethod.TransmuteMethod;
